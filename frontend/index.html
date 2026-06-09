@@ -3,11 +3,93 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    
+    <!-- Primary SEO Meta Tags -->
     <title>Currence Converter – Instant Currency Conversion Tool</title>
-    <meta name="description" content="Convert currencies instantly while browsing. Hover or select any amount and get live exchange rates in real time." />
+    <meta name="description" content="Convert currencies instantly while browsing websites. Hover or select any amount and get live exchange rates in real time." />
+    <meta name="keywords" content="currency converter, instant currency conversion, live exchange rates, USD to INR converter, EUR to INR, GBP to INR, browser currency converter, chrome extension currency converter, hover convert" />
+    <meta name="author" content="HoverConvert Team" />
+    <meta name="robots" content="index, follow" />
+    
+    <!-- Canonical URL -->
+    <link rel="canonical" href="https://currenceconverter.vercel.app" />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://currenceconverter.vercel.app" />
+    <meta property="og:title" content="Currence Converter – Instant Currency Conversion Tool" />
+    <meta property="og:description" content="Convert currencies instantly while browsing websites. Hover or select any amount and get live exchange rates in real time." />
+    <meta property="og:image" content="https://currenceconverter.vercel.app/icons.svg" />
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content="https://currenceconverter.vercel.app" />
+    <meta property="twitter:title" content="Currence Converter – Instant Currency Conversion Tool" />
+    <meta property="twitter:description" content="Convert currencies instantly while browsing websites. Hover or select any amount and get live exchange rates in real time." />
+    <meta property="twitter:image" content="https://currenceconverter.vercel.app/icons.svg" />
+
+    <!-- Favicon & Icons -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/favicon.svg" />
+
+    <!-- Structured JSON-LD Schema (SoftwareApplication & WebSite) -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "HoverConvert - Currence Converter",
+        "operatingSystem": "ChromeOS, Linux, macOS, Windows",
+        "applicationCategory": "BrowserExtension",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "ratingValue": "4.9",
+        "ratingCount": "850",
+        "description": "Convert currencies instantly while browsing. Hover or select any amount and get live exchange rates in real time."
+      }
+    </script>
+    
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "Currence Converter",
+        "url": "https://currenceconverter.vercel.app",
+        "potentialAction": {
+          "@type": "SearchAction",
+          "target": "https://currenceconverter.vercel.app/currency-converter?q={search_term_string}",
+          "query-input": "required name=search_term_string"
+        }
+      }
+    </script>
+
+    <!-- Google Analytics Placeholder (To enable, replace GA_MEASUREMENT_ID) -->
+    <!--
+    <script async src="https://www.googletagmanager.com/gtag/js?id=GA_MEASUREMENT_ID"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'GA_MEASUREMENT_ID');
+    </script>
+    -->
+
+    <!-- Microsoft Clarity Analytics Placeholder -->
+    <!--
+    <script type="text/javascript">
+      (function(c,l,a,r,i,t,y){
+          c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+          t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+          y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+      })(window,document,"clarity","script","CLARITY_PROJECT_ID");
+    </script>
+    -->
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
+

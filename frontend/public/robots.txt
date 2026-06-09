@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /dev-dashboard
+
+Sitemap: https://currenceconverter.vercel.app/sitemap.xml

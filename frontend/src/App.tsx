@@ -23,9 +23,29 @@ interface License {
 
 
 export default function App() {
-  // Navigation Routing: 'landing' | 'customizer' | 'dev-dashboard'
-  const [currentView, setCurrentView] = useState<'landing' | 'customizer' | 'dev-dashboard'>('landing');
+  // Navigation Routing
+  const [path, setPath] = useState<string>(window.location.pathname);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const currentView = path === '/' ? 'landing' : (path === '/customizer' ? 'customizer' : (path === '/dev-dashboard' ? 'dev-dashboard' : 'other'));
+  const setCurrentView = (view: 'landing' | 'customizer' | 'dev-dashboard') => {
+    navigate(view === 'landing' ? '/' : `/${view}`);
+  };
+
+  const navigate = (to: string) => {
+    window.history.pushState(null, '', to);
+    setPath(to);
+    setMobileMenuOpen(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setPath(window.location.pathname);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   // User details & License keys
   const [userId, setUserId] = useState<string>('');
@@ -287,33 +307,45 @@ export default function App() {
   return (
     <>
       {/* FLOAT NAV BAR */}
-      <nav id="navbar" style={{ background: navScrolled || currentView !== 'landing' ? 'rgba(6,8,14,0.94)' : 'rgba(6,8,14,0.75)' }}>
-        <a onClick={() => setCurrentView('landing')} className="logo" style={{ cursor: 'pointer' }}>
+      <nav id="navbar" style={{ background: navScrolled || path !== '/' ? 'rgba(6,8,14,0.94)' : 'rgba(6,8,14,0.75)' }}>
+        <a onClick={() => navigate('/')} className="logo" style={{ cursor: 'pointer' }}>
           <div className="logo-mark">⚡</div>HoverConvert
         </a>
 
-        {currentView === 'landing' ? (
+        {path === '/' ? (
           <ul className="nav-links">
             <li><a href="#features">Features</a></li>
-            <li><a href="#demo-strip">Demo</a></li>
+            <li><a href="#problem">How it Works</a></li>
             <li><a href="#pricing">Pricing</a></li>
             <li><a href="#faq">FAQ</a></li>
+            <li><a onClick={() => navigate('/currency-converter')}>Calculator</a></li>
+            <li><a onClick={() => navigate('/live-exchange-rates')}>Rates</a></li>
           </ul>
         ) : (
           <ul className="nav-links">
             <li>
-              <a onClick={() => setCurrentView('landing')} className="">
+              <a onClick={() => navigate('/')} className="">
                 Home Page
               </a>
             </li>
             <li>
-              <a onClick={() => setCurrentView('customizer')} className={currentView === 'customizer' ? 'active' : ''}>
+              <a onClick={() => navigate('/customizer')} className={path === '/customizer' ? 'active' : ''}>
                 Extension Simulator
+              </a>
+            </li>
+            <li>
+              <a onClick={() => navigate('/currency-converter')} className={path === '/currency-converter' ? 'active' : ''}>
+                Currency Converter
+              </a>
+            </li>
+            <li>
+              <a onClick={() => navigate('/live-exchange-rates')} className={path === '/live-exchange-rates' ? 'active' : ''}>
+                Live Rates
               </a>
             </li>
             {isPro && (
               <li>
-                <a onClick={() => setCurrentView('dev-dashboard')} className={currentView === 'dev-dashboard' ? 'active' : ''}>
+                <a onClick={() => navigate('/dev-dashboard')} className={path === '/dev-dashboard' ? 'active' : ''}>
                   Developer Dashboard
                 </a>
               </li>
@@ -322,13 +354,13 @@ export default function App() {
         )}
 
         <div className="nav-actions">
-          {currentView === 'landing' ? (
+          {path === '/' ? (
             <>
-              <button onClick={() => setCurrentView('customizer')} className="nav-secondary-btn">
+              <button onClick={() => navigate('/customizer')} className="nav-secondary-btn">
                 🛠 Open Simulator
               </button>
               {isPro ? (
-                <button onClick={() => setCurrentView('dev-dashboard')} className="nav-cta">
+                <button onClick={() => navigate('/dev-dashboard')} className="nav-cta">
                   📊 Dashboard
                 </button>
               ) : (
@@ -365,24 +397,28 @@ export default function App() {
           padding: '20px 20px 24px', borderBottom: '1px solid rgba(255,255,255,0.07)',
           gap: '18px', backdropFilter: 'blur(20px)', zIndex: 199
         }}>
-          {currentView === 'landing' ? (
+          {path === '/' ? (
             <>
               <li><a href="#features" onClick={() => setMobileMenuOpen(false)}>Features</a></li>
-              <li><a href="#demo-strip" onClick={() => setMobileMenuOpen(false)}>Demo</a></li>
+              <li><a href="#problem" onClick={() => setMobileMenuOpen(false)}>How it Works</a></li>
               <li><a href="#pricing" onClick={() => setMobileMenuOpen(false)}>Pricing</a></li>
               <li><a href="#faq" onClick={() => setMobileMenuOpen(false)}>FAQ</a></li>
-              <li><a onClick={() => { setCurrentView('customizer'); setMobileMenuOpen(false); }}>🛠 Simulate Extension</a></li>
+              <li><a onClick={() => { navigate('/currency-converter'); setMobileMenuOpen(false); }}>🧮 Currency Converter</a></li>
+              <li><a onClick={() => { navigate('/live-exchange-rates'); setMobileMenuOpen(false); }}>📈 Live Exchange Rates</a></li>
+              <li><a onClick={() => { navigate('/customizer'); setMobileMenuOpen(false); }}>🛠 Simulate Extension</a></li>
               {isPro ? (
-                <li><a onClick={() => { setCurrentView('dev-dashboard'); setMobileMenuOpen(false); }}>📊 Pro Dashboard</a></li>
+                <li><a onClick={() => { navigate('/dev-dashboard'); setMobileMenuOpen(false); }}>📊 Pro Dashboard</a></li>
               ) : (
                 <li><a onClick={() => { setShowLicenseModal(true); setMobileMenuOpen(false); }}>🔑 Activate Pro</a></li>
               )}
             </>
           ) : (
             <>
-              <li><a onClick={() => { setCurrentView('landing'); setMobileMenuOpen(false); }}>Home</a></li>
-              <li><a onClick={() => { setCurrentView('customizer'); setMobileMenuOpen(false); }}>Extension Simulator</a></li>
-              {isPro && <li><a onClick={() => { setCurrentView('dev-dashboard'); setMobileMenuOpen(false); }}>Developer Dashboard</a></li>}
+              <li><a onClick={() => { navigate('/'); setMobileMenuOpen(false); }}>Home</a></li>
+              <li><a onClick={() => { navigate('/customizer'); setMobileMenuOpen(false); }}>Extension Simulator</a></li>
+              <li><a onClick={() => { navigate('/currency-converter'); setMobileMenuOpen(false); }}>Currency Converter</a></li>
+              <li><a onClick={() => { navigate('/live-exchange-rates'); setMobileMenuOpen(false); }}>Live Exchange Rates</a></li>
+              {isPro && <li><a onClick={() => { navigate('/dev-dashboard'); setMobileMenuOpen(false); }}>Developer Dashboard</a></li>}
               {!isPro && <li><a onClick={() => { setShowLicenseModal(true); setMobileMenuOpen(false); }}>🔑 Activate Pro</a></li>}
             </>
           )}
@@ -390,15 +426,15 @@ export default function App() {
       )}
 
       {/* MAIN VIEWPORT */}
-      {currentView === 'landing' && (
+      {path === '/' && (
         <LandingPage
-          setCurrentView={setCurrentView}
           visibleElements={visibleElements}
           setShowLicenseModal={setShowLicenseModal}
+          navigate={navigate}
         />
       )}
 
-      {currentView === 'customizer' && (
+      {path === '/customizer' && (
         <CustomizerWorkspace
           settings={settings}
           saveSettings={saveSettings}
@@ -409,7 +445,7 @@ export default function App() {
         />
       )}
 
-      {currentView === 'dev-dashboard' && (
+      {path === '/dev-dashboard' && (
         <DeveloperDashboard
           isPro={isPro}
           licenseInfo={licenseInfo}
@@ -418,18 +454,63 @@ export default function App() {
         />
       )}
 
+      {path === '/usd-to-inr' && (
+        <USDToINRPage navigate={navigate} rates={rates} />
+      )}
+
+      {path === '/eur-to-inr' && (
+        <EURToINRPage navigate={navigate} rates={rates} />
+      )}
+
+      {path === '/gbp-to-inr' && (
+        <GBPToINRPage navigate={navigate} rates={rates} />
+      )}
+
+      {path === '/currency-converter' && (
+        <CurrencyConverterToolPage navigate={navigate} rates={rates} />
+      )}
+
+      {path === '/live-exchange-rates' && (
+        <LiveExchangeRatesPage navigate={navigate} rates={rates} />
+      )}
+
       {/* FOOTER */}
       <footer>
-        <a onClick={() => setCurrentView('landing')} className="logo" style={{ cursor: 'pointer' }}>
-          <div className="logo-mark">⚡</div>HoverConvert
-        </a>
-        <div className="fl">
-          <a onClick={() => showToast('Privacy policy loaded locally', 'info')}>Privacy</a>
-          <a onClick={() => showToast('Terms of service loaded locally', 'info')}>Terms</a>
-          <a onClick={() => setShowSupportModal(true)}>Support</a>
-          <a onClick={() => showToast('Opening Chrome Web Store...', 'success')}>Chrome Store</a>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: '30px', width: '100%', marginBottom: '30px', borderBottom: '1px solid var(--br)', paddingBottom: '30px' }}>
+          <div style={{ textAlign: 'left' }}>
+            <a onClick={() => navigate('/')} className="logo" style={{ cursor: 'pointer', marginBottom: '10px' }}>
+              <div className="logo-mark">⚡</div>HoverConvert
+            </a>
+            <p style={{ fontSize: '12px', color: 'var(--tx2)', maxWidth: '280px', marginTop: '10px' }}>
+              Instant currency conversion tool. Hover over any amount on any page and get real-time exchange rates instantly.
+            </p>
+          </div>
+          <div style={{ textAlign: 'left' }}>
+            <h4 style={{ fontFamily: 'Space Grotesk', fontSize: '14px', marginBottom: '12px', color: 'var(--tx)' }}>Quick Tools</h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
+              <a onClick={() => navigate('/currency-converter')} style={{ color: 'var(--tx2)', cursor: 'pointer' }}>Currency Converter</a>
+              <a onClick={() => navigate('/live-exchange-rates')} style={{ color: 'var(--tx2)', cursor: 'pointer' }}>Live Exchange Rates</a>
+              <a onClick={() => navigate('/customizer')} style={{ color: 'var(--tx2)', cursor: 'pointer' }}>Extension Simulator</a>
+            </div>
+          </div>
+          <div style={{ textAlign: 'left' }}>
+            <h4 style={{ fontFamily: 'Space Grotesk', fontSize: '14px', marginBottom: '12px', color: 'var(--tx)' }}>Popular Converters</h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
+              <a onClick={() => navigate('/usd-to-inr')} style={{ color: 'var(--tx2)', cursor: 'pointer' }}>USD to INR Converter</a>
+              <a onClick={() => navigate('/eur-to-inr')} style={{ color: 'var(--tx2)', cursor: 'pointer' }}>EUR to INR Converter</a>
+              <a onClick={() => navigate('/gbp-to-inr')} style={{ color: 'var(--tx2)', cursor: 'pointer' }}>GBP to INR Converter</a>
+            </div>
+          </div>
+          <div style={{ textAlign: 'left' }}>
+            <h4 style={{ fontFamily: 'Space Grotesk', fontSize: '14px', marginBottom: '12px', color: 'var(--tx)' }}>Legal & Support</h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
+              <a onClick={() => showToast('Privacy policy loaded', 'info')} style={{ color: 'var(--tx2)', cursor: 'pointer' }}>Privacy Policy</a>
+              <a onClick={() => showToast('Terms of service loaded', 'info')} style={{ color: 'var(--tx2)', cursor: 'pointer' }}>Terms of Service</a>
+              <a onClick={() => setShowSupportModal(true)} style={{ color: 'var(--tx2)', cursor: 'pointer' }}>Priority Support</a>
+            </div>
+          </div>
         </div>
-        <span className="fcopy">© 2026 HoverConvert. Production-Ready Deployment.</span>
+        <span className="fcopy">© 2026 HoverConvert. Premium SEO Landing Pages. All rights reserved.</span>
       </footer>
 
       {/* TOAST NOTIFICATION */}
@@ -530,12 +611,12 @@ export default function App() {
    LANDING PAGE COMPONENT
    ═══════════════════════════════════════════════════ */
 interface LandingProps {
-  setCurrentView: (view: 'landing' | 'customizer' | 'dev-dashboard') => void;
   visibleElements: Record<string, boolean>;
   setShowLicenseModal: (show: boolean) => void;
+  navigate: (to: string) => void;
 }
 
-function LandingPage({ setCurrentView, visibleElements, setShowLicenseModal }: LandingProps) {
+function LandingPage({ visibleElements, setShowLicenseModal, navigate }: LandingProps) {
   // Demo strip calculator state
   const [demoTab, setDemoTab] = useState({ sym: '$', amount: 120, inr: 10200, code: 'USD', name: 'US Dollar' });
   const [activeTabIdx, setActiveTabIdx] = useState(0);
@@ -677,7 +758,7 @@ function LandingPage({ setCurrentView, visibleElements, setShowLicenseModal }: L
           Hover any price online and see the local currency value appear instantly — no new tabs, no typing, no friction whatsoever.
         </p>
         <div className={`hero-btns reveal-init d3 ${isVisible('h-btns') ? 'reveal-visible' : ''}`} data-reveal-id="h-btns">
-          <button onClick={() => setCurrentView('customizer')} className="btn-p">⚡ Simulate Extension</button>
+          <button onClick={() => navigate('/customizer')} className="btn-p">⚡ Simulate Extension</button>
           <a href="#demo-strip" className="btn-g">▶ See it live</a>
         </div>
         <div className={`trust-row reveal-init ${isVisible('h-trust') ? 'reveal-visible' : ''}`} data-reveal-id="h-trust">
@@ -948,7 +1029,7 @@ function LandingPage({ setCurrentView, visibleElements, setShowLicenseModal }: L
               <li className="no">Unlimited conversions</li>
               <li className="no">Favorite currencies</li>
             </ul>
-            <button onClick={() => setCurrentView('customizer')} className="pbtn pbtn-f">Simulate Free</button>
+            <button onClick={() => navigate('/customizer')} className="pbtn pbtn-f">Simulate Free</button>
           </div>
           <div className={`pcard hot reveal-init d1 ${isVisible('p-pro') ? 'reveal-visible' : ''}`} data-reveal-id="p-pro">
             <div className="pbadge">Best Value</div>
@@ -1024,7 +1105,7 @@ function LandingPage({ setCurrentView, visibleElements, setShowLicenseModal }: L
           <h2>Stop opening<br /><em>currency converter tabs.</em></h2>
           <p>Install HoverConvert and see any price in local values — the moment you hover, on every website, forever.</p>
           <div className="cta-btns">
-            <button onClick={() => setCurrentView('customizer')} className="btn-p" style={{ fontSize: '16px', padding: '15px 32px' }}>
+            <button onClick={() => navigate('/customizer')} className="btn-p" style={{ fontSize: '16px', padding: '15px 32px' }}>
               ⚡ Simulate Extension Workspace
             </button>
             <a href="#demo-strip" className="btn-g" style={{ fontSize: '16px', padding: '15px 32px' }}>See how it works</a>
@@ -1658,5 +1739,707 @@ function DeveloperDashboard({ isPro, licenseInfo, settings, setShowSupportModal 
         </div>
       </div>
     </div>
+  );
+}
+
+// ==========================================
+// SEO SUB-PAGE: USD TO INR CONVERTER
+// ==========================================
+interface PageProps {
+  navigate: (to: string) => void;
+  rates: Record<string, number>;
+}
+
+function USDToINRPage({ navigate, rates }: PageProps) {
+  const [amount, setAmount] = useState<number>(100);
+  const usdRate = rates.USD || 1;
+  const inrRate = rates.INR || 85.02;
+  const currentRate = inrRate / usdRate;
+
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.type = 'application/ld+json';
+    script.id = 'faq-schema-usd-inr';
+    script.innerHTML = JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What is the live exchange rate for USD to INR?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": `The live exchange rate is 1 USD = ₹ ${currentRate.toFixed(2)} INR. Exchange rates fluctuate based on market conditions.`
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How does HoverConvert help with USD to INR conversion?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "HoverConvert is a browser extension that lets you hover over any USD price on any webpage and view the converted value in INR instantly, without leaving the page."
+          }
+        }
+      ]
+    });
+    document.head.appendChild(script);
+    return () => {
+      const existing = document.getElementById('faq-schema-usd-inr');
+      if (existing) existing.remove();
+    };
+  }, [currentRate]);
+
+  const converted = (amount * currentRate).toFixed(2);
+
+  return (
+    <section className="seo-page" style={{ paddingTop: '100px', minHeight: '80vh', background: 'var(--bg)' }}>
+      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 20px' }}>
+        <div style={{ marginBottom: '20px' }}>
+          <a onClick={() => navigate('/')} style={{ color: 'var(--cy)', cursor: 'pointer', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+            ← Back to Home
+          </a>
+        </div>
+        
+        <div className="seo-hero" style={{ marginBottom: '40px' }}>
+          <div className="pill">⚡ Real-Time Exchange Rates</div>
+          <h1 style={{ fontSize: 'clamp(28px, 4vw, 42px)', fontWeight: 700, marginBottom: '16px', lineHeight: 1.2 }}>
+            USD to INR Converter – Live US Dollar to Indian Rupee Exchange Rate
+          </h1>
+          <p style={{ color: 'var(--tx2)', fontSize: '16px', maxWidth: '700px' }}>
+            Convert US Dollars (USD) to Indian Rupees (INR) instantly using our live currency calculator. Monitor real-time market rates and download our browser extension for automatic conversions on the fly.
+          </p>
+        </div>
+
+        {/* Calculator Widget */}
+        <div className="dashboard-card" style={{ padding: '30px', background: 'var(--bg2)', border: '1px solid var(--br2)', borderRadius: '16px', marginBottom: '40px' }}>
+          <h3 style={{ marginBottom: '20px', fontFamily: 'Space Grotesk' }}>Interactive USD to INR Calculator</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '20px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', color: 'var(--tx2)', marginBottom: '8px' }}>US Dollar (USD)</label>
+              <input 
+                type="number" 
+                value={amount} 
+                onChange={(e) => setAmount(Number(e.target.value))}
+                style={{ width: '100%', padding: '12px', background: 'var(--bg3)', border: '1px solid var(--br)', borderRadius: '8px', color: '#fff', fontSize: '16px' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', color: 'var(--tx2)', marginBottom: '8px' }}>Indian Rupee (INR)</label>
+              <input 
+                type="text" 
+                value={`₹ ${Number(converted).toLocaleString(undefined, { minimumFractionDigits: 2 })}`} 
+                readOnly
+                style={{ width: '100%', padding: '12px', background: 'var(--bg4)', border: '1px solid var(--br)', borderRadius: '8px', color: 'var(--cy)', fontSize: '16px', fontWeight: 'bold' }}
+              />
+            </div>
+          </div>
+          <div style={{ fontSize: '13px', color: 'var(--tx3)' }}>
+            Live rate: <strong>1 USD = ₹ {currentRate.toFixed(4)} INR</strong>. Updated in real-time.
+          </div>
+        </div>
+
+        {/* Content & Examples */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '40px', marginBottom: '50px' }}>
+          <div style={{ textAlign: 'left' }}>
+            <h2 style={{ fontFamily: 'Space Grotesk', fontSize: '24px', marginBottom: '16px' }}>USD to INR Conversion Table</h2>
+            <p style={{ color: 'var(--tx2)', fontSize: '14px', marginBottom: '20px' }}>
+              Here are some of the most common US Dollar to Indian Rupee conversion values at the current exchange rate:
+            </p>
+            <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '30px' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--br)', textAlign: 'left' }}>
+                  <th style={{ padding: '12px 8px', color: 'var(--tx2)', fontSize: '13px' }}>US Dollar (USD)</th>
+                  <th style={{ padding: '12px 8px', color: 'var(--tx2)', fontSize: '13px' }}>Indian Rupee (INR)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[1, 5, 10, 50, 100, 500, 1000].map((val) => (
+                  <tr key={val} style={{ borderBottom: '1px solid var(--br)' }}>
+                    <td style={{ padding: '12px 8px', fontSize: '14px' }}>${val} USD</td>
+                    <td style={{ padding: '12px 8px', fontSize: '14px', color: 'var(--cy)', fontWeight: 'bold' }}>₹ {(val * currentRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} INR</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <h2 style={{ fontFamily: 'Space Grotesk', fontSize: '24px', marginBottom: '16px' }}>Why Choose HoverConvert for USD to INR?</h2>
+            <p style={{ color: 'var(--tx2)', fontSize: '14px', marginBottom: '16px', lineHeight: 1.6 }}>
+              Instead of manually copying and pasting values into search engines or converting tables, <strong>HoverConvert</strong> detects price selectors dynamically. With our browser extension, you can view foreign currency conversions directly on websites like Amazon, eBay, Airbnb, and global blogs.
+            </p>
+          </div>
+
+          <div style={{ textAlign: 'left' }}>
+            <div className="dashboard-card" style={{ padding: '20px', background: 'rgba(124, 110, 250, 0.05)', border: '1px solid rgba(124, 110, 250, 0.2)', borderRadius: '12px', marginBottom: '30px' }}>
+              <h4 style={{ fontFamily: 'Space Grotesk', marginBottom: '10px' }}>Popular Conversions</h4>
+              <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px' }}>
+                <li><a onClick={() => navigate('/eur-to-inr')} style={{ color: 'var(--cy)', cursor: 'pointer', textDecoration: 'underline' }}>EUR to INR Converter</a></li>
+                <li><a onClick={() => navigate('/gbp-to-inr')} style={{ color: 'var(--cy)', cursor: 'pointer', textDecoration: 'underline' }}>GBP to INR Converter</a></li>
+                <li><a onClick={() => navigate('/currency-converter')} style={{ color: 'var(--cy)', cursor: 'pointer', textDecoration: 'underline' }}>Free Currency Converter</a></li>
+                <li><a onClick={() => navigate('/live-exchange-rates')} style={{ color: 'var(--cy)', cursor: 'pointer', textDecoration: 'underline' }}>Live Exchange Rates</a></li>
+              </ul>
+            </div>
+
+            <div className="dashboard-card" style={{ padding: '20px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--br)', borderRadius: '12px' }}>
+              <h4 style={{ fontFamily: 'Space Grotesk', marginBottom: '10px' }}>Convert on Hover</h4>
+              <p style={{ fontSize: '12px', color: 'var(--tx2)', marginBottom: '14px' }}>
+                Want to convert currencies automatically while you browse without clicking? Try the HoverConvert Chrome extension.
+              </p>
+              <button onClick={() => navigate('/customizer')} className="nav-cta" style={{ width: '100%', padding: '10px' }}>
+                ⚡ Try Extension
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* FAQs */}
+        <div style={{ borderTop: '1px solid var(--br)', paddingTop: '40px', marginBottom: '60px', textAlign: 'left' }}>
+          <h2 style={{ fontFamily: 'Space Grotesk', fontSize: '24px', marginBottom: '24px' }}>Frequently Asked Questions</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div>
+              <h4 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px' }}>How accurate is this USD to INR calculator?</h4>
+              <p style={{ fontSize: '13px', color: 'var(--tx2)' }}>
+                Our currency converter fetches official exchange rates from major global banking APIs multiple times a day. While it is highly accurate, it is intended for informational purposes and should not be used as a final reference for international bank transfers or commercial trading.
+              </p>
+            </div>
+            <div>
+              <h4 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px' }}>What is the current live USD to INR exchange rate?</h4>
+              <p style={{ fontSize: '13px', color: 'var(--tx2)' }}>
+                The current exchange rate is 1 USD = ₹ {currentRate.toFixed(2)} INR. Exchange rates vary based on real-time market liquidity and macroeconomic factors.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ==========================================
+// SEO SUB-PAGE: EUR TO INR CONVERTER
+// ==========================================
+function EURToINRPage({ navigate, rates }: PageProps) {
+  const [amount, setAmount] = useState<number>(100);
+  const eurRate = rates.EUR || 0.92;
+  const inrRate = rates.INR || 85.02;
+  const currentRate = inrRate / eurRate;
+
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.type = 'application/ld+json';
+    script.id = 'faq-schema-eur-inr';
+    script.innerHTML = JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What is the live exchange rate for EUR to INR?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": `The live exchange rate is 1 EUR = ₹ ${currentRate.toFixed(2)} INR. Exchange rates fluctuate based on market conditions.`
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How does HoverConvert help with EUR to INR conversion?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "HoverConvert is a browser extension that lets you hover over any EUR price on any webpage and view the converted value in INR instantly, without leaving the page."
+          }
+        }
+      ]
+    });
+    document.head.appendChild(script);
+    return () => {
+      const existing = document.getElementById('faq-schema-eur-inr');
+      if (existing) existing.remove();
+    };
+  }, [currentRate]);
+
+  const converted = (amount * currentRate).toFixed(2);
+
+  return (
+    <section className="seo-page" style={{ paddingTop: '100px', minHeight: '80vh', background: 'var(--bg)' }}>
+      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 20px' }}>
+        <div style={{ marginBottom: '20px' }}>
+          <a onClick={() => navigate('/')} style={{ color: 'var(--cy)', cursor: 'pointer', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+            ← Back to Home
+          </a>
+        </div>
+        
+        <div className="seo-hero" style={{ marginBottom: '40px' }}>
+          <div className="pill">⚡ Real-Time Exchange Rates</div>
+          <h1 style={{ fontSize: 'clamp(28px, 4vw, 42px)', fontWeight: 700, marginBottom: '16px', lineHeight: 1.2 }}>
+            EUR to INR Converter – Live Euro to Indian Rupee Exchange Rate
+          </h1>
+          <p style={{ color: 'var(--tx2)', fontSize: '16px', maxWidth: '700px' }}>
+            Convert Euros (EUR) to Indian Rupees (INR) instantly using our live currency calculator. Monitor real-time market rates and download our browser extension for automatic conversions on the fly.
+          </p>
+        </div>
+
+        {/* Calculator Widget */}
+        <div className="dashboard-card" style={{ padding: '30px', background: 'var(--bg2)', border: '1px solid var(--br2)', borderRadius: '16px', marginBottom: '40px' }}>
+          <h3 style={{ marginBottom: '20px', fontFamily: 'Space Grotesk' }}>Interactive EUR to INR Calculator</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '20px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', color: 'var(--tx2)', marginBottom: '8px' }}>Euro (EUR)</label>
+              <input 
+                type="number" 
+                value={amount} 
+                onChange={(e) => setAmount(Number(e.target.value))}
+                style={{ width: '100%', padding: '12px', background: 'var(--bg3)', border: '1px solid var(--br)', borderRadius: '8px', color: '#fff', fontSize: '16px' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', color: 'var(--tx2)', marginBottom: '8px' }}>Indian Rupee (INR)</label>
+              <input 
+                type="text" 
+                value={`₹ ${Number(converted).toLocaleString(undefined, { minimumFractionDigits: 2 })}`} 
+                readOnly
+                style={{ width: '100%', padding: '12px', background: 'var(--bg4)', border: '1px solid var(--br)', borderRadius: '8px', color: 'var(--cy)', fontSize: '16px', fontWeight: 'bold' }}
+              />
+            </div>
+          </div>
+          <div style={{ fontSize: '13px', color: 'var(--tx3)' }}>
+            Live rate: <strong>1 EUR = ₹ {currentRate.toFixed(4)} INR</strong>. Updated in real-time.
+          </div>
+        </div>
+
+        {/* Content & Examples */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '40px', marginBottom: '50px' }}>
+          <div style={{ textAlign: 'left' }}>
+            <h2 style={{ fontFamily: 'Space Grotesk', fontSize: '24px', marginBottom: '16px' }}>EUR to INR Conversion Table</h2>
+            <p style={{ color: 'var(--tx2)', fontSize: '14px', marginBottom: '20px' }}>
+              Here are some of the most common Euro to Indian Rupee conversion values at the current exchange rate:
+            </p>
+            <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '30px' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--br)', textAlign: 'left' }}>
+                  <th style={{ padding: '12px 8px', color: 'var(--tx2)', fontSize: '13px' }}>Euro (EUR)</th>
+                  <th style={{ padding: '12px 8px', color: 'var(--tx2)', fontSize: '13px' }}>Indian Rupee (INR)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[1, 5, 10, 50, 100, 500, 1000].map((val) => (
+                  <tr key={val} style={{ borderBottom: '1px solid var(--br)' }}>
+                    <td style={{ padding: '12px 8px', fontSize: '14px' }}>€{val} EUR</td>
+                    <td style={{ padding: '12px 8px', fontSize: '14px', color: 'var(--cy)', fontWeight: 'bold' }}>₹ {(val * currentRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} INR</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <h2 style={{ fontFamily: 'Space Grotesk', fontSize: '24px', marginBottom: '16px' }}>Why Choose HoverConvert for EUR to INR?</h2>
+            <p style={{ color: 'var(--tx2)', fontSize: '14px', marginBottom: '16px', lineHeight: 1.6 }}>
+              Instead of manually copying and pasting values into search engines or converting tables, <strong>HoverConvert</strong> detects price selectors dynamically. With our browser extension, you can view foreign currency conversions directly on websites like Amazon, eBay, Airbnb, and global blogs.
+            </p>
+          </div>
+
+          <div style={{ textAlign: 'left' }}>
+            <div className="dashboard-card" style={{ padding: '20px', background: 'rgba(124, 110, 250, 0.05)', border: '1px solid rgba(124, 110, 250, 0.2)', borderRadius: '12px', marginBottom: '30px' }}>
+              <h4 style={{ fontFamily: 'Space Grotesk', marginBottom: '10px' }}>Popular Conversions</h4>
+              <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px' }}>
+                <li><a onClick={() => navigate('/usd-to-inr')} style={{ color: 'var(--cy)', cursor: 'pointer', textDecoration: 'underline' }}>USD to INR Converter</a></li>
+                <li><a onClick={() => navigate('/gbp-to-inr')} style={{ color: 'var(--cy)', cursor: 'pointer', textDecoration: 'underline' }}>GBP to INR Converter</a></li>
+                <li><a onClick={() => navigate('/currency-converter')} style={{ color: 'var(--cy)', cursor: 'pointer', textDecoration: 'underline' }}>Free Currency Converter</a></li>
+                <li><a onClick={() => navigate('/live-exchange-rates')} style={{ color: 'var(--cy)', cursor: 'pointer', textDecoration: 'underline' }}>Live Exchange Rates</a></li>
+              </ul>
+            </div>
+
+            <div className="dashboard-card" style={{ padding: '20px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--br)', borderRadius: '12px' }}>
+              <h4 style={{ fontFamily: 'Space Grotesk', marginBottom: '10px' }}>Convert on Hover</h4>
+              <p style={{ fontSize: '12px', color: 'var(--tx2)', marginBottom: '14px' }}>
+                Want to convert currencies automatically while you browse without clicking? Try the HoverConvert Chrome extension.
+              </p>
+              <button onClick={() => navigate('/customizer')} className="nav-cta" style={{ width: '100%', padding: '10px' }}>
+                ⚡ Try Extension
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* FAQs */}
+        <div style={{ borderTop: '1px solid var(--br)', paddingTop: '40px', marginBottom: '60px', textAlign: 'left' }}>
+          <h2 style={{ fontFamily: 'Space Grotesk', fontSize: '24px', marginBottom: '24px' }}>Frequently Asked Questions</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div>
+              <h4 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px' }}>How accurate is this EUR to INR calculator?</h4>
+              <p style={{ fontSize: '13px', color: 'var(--tx2)' }}>
+                Our currency converter fetches official exchange rates from major global banking APIs multiple times a day. While it is highly accurate, it is intended for informational purposes and should not be used as a final reference for international bank transfers or commercial trading.
+              </p>
+            </div>
+            <div>
+              <h4 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px' }}>What is the current live EUR to INR exchange rate?</h4>
+              <p style={{ fontSize: '13px', color: 'var(--tx2)' }}>
+                The current exchange rate is 1 EUR = ₹ {currentRate.toFixed(2)} INR. Exchange rates vary based on real-time market liquidity and macroeconomic factors.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ==========================================
+// SEO SUB-PAGE: GBP TO INR CONVERTER
+// ==========================================
+function GBPToINRPage({ navigate, rates }: PageProps) {
+  const [amount, setAmount] = useState<number>(100);
+  const gbpRate = rates.GBP || 0.78;
+  const inrRate = rates.INR || 85.02;
+  const currentRate = inrRate / gbpRate;
+
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.type = 'application/ld+json';
+    script.id = 'faq-schema-gbp-inr';
+    script.innerHTML = JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What is the live exchange rate for GBP to INR?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": `The live exchange rate is 1 GBP = ₹ ${currentRate.toFixed(2)} INR. Exchange rates fluctuate based on market conditions.`
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How does HoverConvert help with GBP to INR conversion?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "HoverConvert is a browser extension that lets you hover over any GBP price on any webpage and view the converted value in INR instantly, without leaving the page."
+          }
+        }
+      ]
+    });
+    document.head.appendChild(script);
+    return () => {
+      const existing = document.getElementById('faq-schema-gbp-inr');
+      if (existing) existing.remove();
+    };
+  }, [currentRate]);
+
+  const converted = (amount * currentRate).toFixed(2);
+
+  return (
+    <section className="seo-page" style={{ paddingTop: '100px', minHeight: '80vh', background: 'var(--bg)' }}>
+      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 20px' }}>
+        <div style={{ marginBottom: '20px' }}>
+          <a onClick={() => navigate('/')} style={{ color: 'var(--cy)', cursor: 'pointer', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+            ← Back to Home
+          </a>
+        </div>
+        
+        <div className="seo-hero" style={{ marginBottom: '40px' }}>
+          <div className="pill">⚡ Real-Time Exchange Rates</div>
+          <h1 style={{ fontSize: 'clamp(28px, 4vw, 42px)', fontWeight: 700, marginBottom: '16px', lineHeight: 1.2 }}>
+            GBP to INR Converter – Live British Pound to Indian Rupee Exchange Rate
+          </h1>
+          <p style={{ color: 'var(--tx2)', fontSize: '16px', maxWidth: '700px' }}>
+            Convert British Pounds (GBP) to Indian Rupees (INR) instantly using our live currency calculator. Monitor real-time market rates and download our browser extension for automatic conversions on the fly.
+          </p>
+        </div>
+
+        {/* Calculator Widget */}
+        <div className="dashboard-card" style={{ padding: '30px', background: 'var(--bg2)', border: '1px solid var(--br2)', borderRadius: '16px', marginBottom: '40px' }}>
+          <h3 style={{ marginBottom: '20px', fontFamily: 'Space Grotesk' }}>Interactive GBP to INR Calculator</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '20px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', color: 'var(--tx2)', marginBottom: '8px' }}>British Pound (GBP)</label>
+              <input 
+                type="number" 
+                value={amount} 
+                onChange={(e) => setAmount(Number(e.target.value))}
+                style={{ width: '100%', padding: '12px', background: 'var(--bg3)', border: '1px solid var(--br)', borderRadius: '8px', color: '#fff', fontSize: '16px' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', color: 'var(--tx2)', marginBottom: '8px' }}>Indian Rupee (INR)</label>
+              <input 
+                type="text" 
+                value={`₹ ${Number(converted).toLocaleString(undefined, { minimumFractionDigits: 2 })}`} 
+                readOnly
+                style={{ width: '100%', padding: '12px', background: 'var(--bg4)', border: '1px solid var(--br)', borderRadius: '8px', color: 'var(--cy)', fontSize: '16px', fontWeight: 'bold' }}
+              />
+            </div>
+          </div>
+          <div style={{ fontSize: '13px', color: 'var(--tx3)' }}>
+            Live rate: <strong>1 GBP = ₹ {currentRate.toFixed(4)} INR</strong>. Updated in real-time.
+          </div>
+        </div>
+
+        {/* Content & Examples */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '40px', marginBottom: '50px' }}>
+          <div style={{ textAlign: 'left' }}>
+            <h2 style={{ fontFamily: 'Space Grotesk', fontSize: '24px', marginBottom: '16px' }}>GBP to INR Conversion Table</h2>
+            <p style={{ color: 'var(--tx2)', fontSize: '14px', marginBottom: '20px' }}>
+              Here are some of the most common British Pound to Indian Rupee conversion values at the current exchange rate:
+            </p>
+            <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '30px' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--br)', textAlign: 'left' }}>
+                  <th style={{ padding: '12px 8px', color: 'var(--tx2)', fontSize: '13px' }}>British Pound (GBP)</th>
+                  <th style={{ padding: '12px 8px', color: 'var(--tx2)', fontSize: '13px' }}>Indian Rupee (INR)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[1, 5, 10, 50, 100, 500, 1000].map((val) => (
+                  <tr key={val} style={{ borderBottom: '1px solid var(--br)' }}>
+                    <td style={{ padding: '12px 8px', fontSize: '14px' }}>£{val} GBP</td>
+                    <td style={{ padding: '12px 8px', fontSize: '14px', color: 'var(--cy)', fontWeight: 'bold' }}>₹ {(val * currentRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} INR</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <h2 style={{ fontFamily: 'Space Grotesk', fontSize: '24px', marginBottom: '16px' }}>Why Choose HoverConvert for GBP to INR?</h2>
+            <p style={{ color: 'var(--tx2)', fontSize: '14px', marginBottom: '16px', lineHeight: 1.6 }}>
+              Instead of manually copying and pasting values into search engines or converting tables, <strong>HoverConvert</strong> detects price selectors dynamically. With our browser extension, you can view foreign currency conversions directly on websites like Amazon, eBay, Airbnb, and global blogs.
+            </p>
+          </div>
+
+          <div style={{ textAlign: 'left' }}>
+            <div className="dashboard-card" style={{ padding: '20px', background: 'rgba(124, 110, 250, 0.05)', border: '1px solid rgba(124, 110, 250, 0.2)', borderRadius: '12px', marginBottom: '30px' }}>
+              <h4 style={{ fontFamily: 'Space Grotesk', marginBottom: '10px' }}>Popular Conversions</h4>
+              <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px' }}>
+                <li><a onClick={() => navigate('/usd-to-inr')} style={{ color: 'var(--cy)', cursor: 'pointer', textDecoration: 'underline' }}>USD to INR Converter</a></li>
+                <li><a onClick={() => navigate('/eur-to-inr')} style={{ color: 'var(--cy)', cursor: 'pointer', textDecoration: 'underline' }}>EUR to INR Converter</a></li>
+                <li><a onClick={() => navigate('/currency-converter')} style={{ color: 'var(--cy)', cursor: 'pointer', textDecoration: 'underline' }}>Free Currency Converter</a></li>
+                <li><a onClick={() => navigate('/live-exchange-rates')} style={{ color: 'var(--cy)', cursor: 'pointer', textDecoration: 'underline' }}>Live Exchange Rates</a></li>
+              </ul>
+            </div>
+
+            <div className="dashboard-card" style={{ padding: '20px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--br)', borderRadius: '12px' }}>
+              <h4 style={{ fontFamily: 'Space Grotesk', marginBottom: '10px' }}>Convert on Hover</h4>
+              <p style={{ fontSize: '12px', color: 'var(--tx2)', marginBottom: '14px' }}>
+                Want to convert currencies automatically while you browse without clicking? Try the HoverConvert Chrome extension.
+              </p>
+              <button onClick={() => navigate('/customizer')} className="nav-cta" style={{ width: '100%', padding: '10px' }}>
+                ⚡ Try Extension
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* FAQs */}
+        <div style={{ borderTop: '1px solid var(--br)', paddingTop: '40px', marginBottom: '60px', textAlign: 'left' }}>
+          <h2 style={{ fontFamily: 'Space Grotesk', fontSize: '24px', marginBottom: '24px' }}>Frequently Asked Questions</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div>
+              <h4 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px' }}>How accurate is this GBP to INR calculator?</h4>
+              <p style={{ fontSize: '13px', color: 'var(--tx2)' }}>
+                Our currency converter fetches official exchange rates from major global banking APIs multiple times a day. While it is highly accurate, it is intended for informational purposes and should not be used as a final reference for international bank transfers or commercial trading.
+              </p>
+            </div>
+            <div>
+              <h4 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px' }}>What is the current live GBP to INR exchange rate?</h4>
+              <p style={{ fontSize: '13px', color: 'var(--tx2)' }}>
+                The current exchange rate is 1 GBP = ₹ {currentRate.toFixed(2)} INR. Exchange rates vary based on real-time market liquidity and macroeconomic factors.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ==========================================
+// SEO SUB-PAGE: FREE CURRENCY CONVERTER
+// ==========================================
+function CurrencyConverterToolPage({ navigate, rates }: PageProps) {
+  const [amount, setAmount] = useState<number>(100);
+  const [fromCurr, setFromCurr] = useState<string>('USD');
+  const [toCurr, setToCurr] = useState<string>('INR');
+
+  const supportedList = Object.keys(rates).length > 0 ? Object.keys(rates) : ['USD', 'INR', 'EUR', 'GBP', 'JPY', 'AUD'];
+
+  const fromRate = rates[fromCurr] || 1;
+  const toRate = rates[toCurr] || 1;
+  const currentRate = toRate / fromRate;
+  const converted = (amount * currentRate).toFixed(2);
+
+  return (
+    <section className="seo-page" style={{ paddingTop: '100px', minHeight: '80vh', background: 'var(--bg)' }}>
+      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 20px' }}>
+        <div style={{ marginBottom: '20px' }}>
+          <a onClick={() => navigate('/')} style={{ color: 'var(--cy)', cursor: 'pointer', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+            ← Back to Home
+          </a>
+        </div>
+        
+        <div className="seo-hero" style={{ marginBottom: '40px' }}>
+          <div className="pill">⚡ Universal Calculator</div>
+          <h1 style={{ fontSize: 'clamp(28px, 4vw, 42px)', fontWeight: 700, marginBottom: '16px', lineHeight: 1.2 }}>
+            Instant Currency Converter – Real-Time Foreign Exchange Calculator
+          </h1>
+          <p style={{ color: 'var(--tx2)', fontSize: '16px', maxWidth: '700px' }}>
+            Convert any currency instantly using our interactive calculator. Supports over 160 currencies globally with ultra-low latency updates.
+          </p>
+        </div>
+
+        {/* Calculator Widget */}
+        <div className="dashboard-card" style={{ padding: '30px', background: 'var(--bg2)', border: '1px solid var(--br2)', borderRadius: '16px', marginBottom: '40px' }}>
+          <h3 style={{ marginBottom: '20px', fontFamily: 'Space Grotesk' }}>Interactive Multi-Currency Calculator</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '20px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', color: 'var(--tx2)', marginBottom: '8px' }}>From Currency</label>
+              <select 
+                value={fromCurr} 
+                onChange={(e) => setFromCurr(e.target.value)}
+                style={{ width: '100%', padding: '12px', background: 'var(--bg3)', border: '1px solid var(--br)', borderRadius: '8px', color: '#fff', fontSize: '16px', marginBottom: '12px' }}
+              >
+                {supportedList.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <input 
+                type="number" 
+                value={amount} 
+                onChange={(e) => setAmount(Number(e.target.value))}
+                style={{ width: '100%', padding: '12px', background: 'var(--bg3)', border: '1px solid var(--br)', borderRadius: '8px', color: '#fff', fontSize: '16px' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', color: 'var(--tx2)', marginBottom: '8px' }}>To Currency</label>
+              <select 
+                value={toCurr} 
+                onChange={(e) => setToCurr(e.target.value)}
+                style={{ width: '100%', padding: '12px', background: 'var(--bg3)', border: '1px solid var(--br)', borderRadius: '8px', color: '#fff', fontSize: '16px', marginBottom: '12px' }}
+              >
+                {supportedList.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <input 
+                type="text" 
+                value={`${converted} ${toCurr}`} 
+                readOnly
+                style={{ width: '100%', padding: '12px', background: 'var(--bg4)', border: '1px solid var(--br)', borderRadius: '8px', color: 'var(--cy)', fontSize: '16px', fontWeight: 'bold' }}
+              />
+            </div>
+          </div>
+          <div style={{ fontSize: '13px', color: 'var(--tx3)' }}>
+            Live rate: <strong>1 {fromCurr} = {currentRate.toFixed(4)} {toCurr}</strong>. Updated in real-time.
+          </div>
+        </div>
+
+        {/* Content Section */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '40px', marginBottom: '50px' }}>
+          <div style={{ textAlign: 'left' }}>
+            <h2 style={{ fontFamily: 'Space Grotesk', fontSize: '24px', marginBottom: '16px' }}>Supported Conversion Path Quicklinks</h2>
+            <p style={{ color: 'var(--tx2)', fontSize: '14px', marginBottom: '20px' }}>
+              Access direct calculations for popular pairs immediately to view charts and conversion grids:
+            </p>
+            <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <li>
+                <a onClick={() => navigate('/usd-to-inr')} style={{ color: 'var(--cy)', cursor: 'pointer', textDecoration: 'underline', fontSize: '14px' }}>
+                  🇺🇸 USD to 🇮🇳 INR Converter (US Dollar to Indian Rupee)
+                </a>
+              </li>
+              <li>
+                <a onClick={() => navigate('/eur-to-inr')} style={{ color: 'var(--cy)', cursor: 'pointer', textDecoration: 'underline', fontSize: '14px' }}>
+                  🇪🇺 EUR to 🇮🇳 INR Converter (Euro to Indian Rupee)
+                </a>
+              </li>
+              <li>
+                <a onClick={() => navigate('/gbp-to-inr')} style={{ color: 'var(--cy)', cursor: 'pointer', textDecoration: 'underline', fontSize: '14px' }}>
+                  🇬🇧 GBP to 🇮🇳 INR Converter (British Pound to Indian Rupee)
+                </a>
+              </li>
+            </ul>
+          </div>
+          <div style={{ textAlign: 'left' }}>
+            <div className="dashboard-card" style={{ padding: '20px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--br)', borderRadius: '12px' }}>
+              <h4 style={{ fontFamily: 'Space Grotesk', marginBottom: '10px' }}>Compare Real-Time Live Rates</h4>
+              <p style={{ fontSize: '12px', color: 'var(--tx2)', marginBottom: '14px' }}>
+                Need to view all currency fluctuations at once? Check our real-time exchange rate table.
+              </p>
+              <button onClick={() => navigate('/live-exchange-rates')} className="nav-secondary-btn" style={{ width: '100%' }}>
+                📈 View Rate Board
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ==========================================
+// SEO SUB-PAGE: LIVE EXCHANGE RATES BOARD
+// ==========================================
+function LiveExchangeRatesPage({ navigate, rates }: PageProps) {
+  const [filterQuery, setFilterQuery] = useState<string>('');
+  const supportedList = Object.entries(rates);
+
+  const filteredRates = supportedList.filter(([code]) => 
+    code.toLowerCase().includes(filterQuery.toLowerCase())
+  );
+
+  return (
+    <section className="seo-page" style={{ paddingTop: '100px', minHeight: '80vh', background: 'var(--bg)' }}>
+      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 20px' }}>
+        <div style={{ marginBottom: '20px' }}>
+          <a onClick={() => navigate('/')} style={{ color: 'var(--cy)', cursor: 'pointer', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+            ← Back to Home
+          </a>
+        </div>
+        
+        <div className="seo-hero" style={{ marginBottom: '40px' }}>
+          <div className="pill">📈 Global FX Market</div>
+          <h1 style={{ fontSize: 'clamp(28px, 4vw, 42px)', fontWeight: 700, marginBottom: '16px', lineHeight: 1.2 }}>
+            Live Exchange Rates – Real-Time Global Currency FX Rates Board
+          </h1>
+          <p style={{ color: 'var(--tx2)', fontSize: '16px', maxWidth: '700px' }}>
+            Monitor the latest live foreign exchange market conversions. Search, filter, and track exchange rates relative to USD in real-time.
+          </p>
+        </div>
+
+        {/* Filter Input */}
+        <div style={{ marginBottom: '20px' }}>
+          <input 
+            type="text"
+            placeholder="Search currency code (e.g. INR, EUR, JPY)..."
+            value={filterQuery}
+            onChange={(e) => setFilterQuery(e.target.value)}
+            style={{ width: '100%', padding: '12px 16px', background: 'var(--bg2)', border: '1px solid var(--br)', borderRadius: '8px', color: '#fff', fontSize: '15px' }}
+          />
+        </div>
+
+        {/* Grid Display */}
+        <div className="dashboard-card" style={{ padding: '24px', background: 'var(--bg2)', border: '1px solid var(--br2)', borderRadius: '16px', marginBottom: '40px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
+            {filteredRates.length > 0 ? (
+              filteredRates.map(([code, rate]) => (
+                <div key={code} style={{ padding: '16px', background: 'var(--bg3)', borderRadius: '8px', border: '1px solid var(--br)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--tx3)', fontWeight: 'bold' }}>CURRENCY PAIR</span>
+                  <div style={{ fontSize: '16px', fontWeight: 'bold', color: 'var(--tx)' }}>USD / {code}</div>
+                  <div style={{ fontSize: '20px', fontWeight: '700', color: 'var(--cy)' }}>
+                    {rate.toFixed(4)}
+                  </div>
+                  <span style={{ fontSize: '11px', color: 'var(--success)' }}>● Real-time Feed</span>
+                </div>
+              ))
+            ) : (
+              <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '40px', color: 'var(--tx3)' }}>
+                No matching currencies found.
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Internal Linking & Call-To-Action */}
+        <div className="dashboard-card" style={{ padding: '30px', background: 'linear-gradient(135deg, rgba(124, 110, 250, 0.1) 0%, rgba(34, 211, 238, 0.05) 100%)', border: '1px solid rgba(124, 110, 250, 0.25)', borderRadius: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '16px' }}>
+          <h3 style={{ fontFamily: 'Space Grotesk' }}>Never manually calculate exchange rates again</h3>
+          <p style={{ fontSize: '14px', color: 'var(--tx2)', maxWidth: '500px' }}>
+            Install the free HoverConvert Chrome extension to convert all foreign price lists and checkout items automatically while browsing.
+          </p>
+          <button onClick={() => navigate('/customizer')} className="nav-cta" style={{ padding: '12px 24px' }}>
+            ⚡ Get HoverConvert Now
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }
