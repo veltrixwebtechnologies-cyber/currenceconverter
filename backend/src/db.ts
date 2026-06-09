@@ -1,7 +1,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-const DATA_FILE = path.join(__dirname, '..', 'data.json');
+const isVercel = !!process.env.VERCEL;
+const DATA_FILE = isVercel
+  ? path.join('/tmp', 'data.json')
+  : path.join(__dirname, '..', 'data.json');
+
 
 export interface UserSettings {
   userId: string;
