@@ -19,23 +19,12 @@
       "dest": "backend/src/index.ts"
     },
     {
-      "src": "/assets/(.*)",
-      "headers": {
-        "cache-control": "public, max-age=31536000, immutable"
-      },
-      "dest": "/frontend/dist/assets/$1"
-    },
-    {
-      "src": "/favicon.svg",
-      "dest": "/frontend/dist/favicon.svg"
-    },
-    {
-      "src": "/icons.svg",
-      "dest": "/frontend/dist/icons.svg"
+      "handle": "filesystem"
     },
     {
       "src": "/((?!api/).*)",
-      "dest": "/frontend/dist/index.html"
+      "dest": "/index.html"
     }
   ]
+
 }
