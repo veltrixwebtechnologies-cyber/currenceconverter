@@ -2061,6 +2061,9 @@ footer {
   .hbg {
     display: block;
   }
+  .nav-actions > *:not(.hbg) {
+    display: none;
+  }
   .hero h1 {
     font-size: clamp(30px, 8vw, 44px);
     letter-spacing: -1.5px;

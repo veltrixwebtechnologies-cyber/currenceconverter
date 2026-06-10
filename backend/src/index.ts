@@ -102,21 +102,21 @@ app.get('/api/rates', async (req, res) => {
 });
 
 // Settings endpoints
-app.get('/api/settings/:userId', (req, res) => {
+app.get('/api/settings/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
-    const settings = db.getSettings(userId);
+    const settings = await db.getSettings(userId);
     res.json({ success: true, settings });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
-app.post('/api/settings/:userId', (req, res) => {
+app.post('/api/settings/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
     const updates = req.body;
-    const settings = db.updateSettings(userId, updates);
+    const settings = await db.updateSettings(userId, updates);
     res.json({ success: true, settings });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
@@ -124,13 +124,13 @@ app.post('/api/settings/:userId', (req, res) => {
 });
 
 // License validation & activation
-app.post('/api/license/activate', (req, res) => {
+app.post('/api/license/activate', async (req, res) => {
   try {
     const { email } = req.body;
     if (!email || !email.includes('@')) {
       return res.status(400).json({ success: false, message: 'Invalid email address' });
     }
-    const license = db.createLicense(email);
+    const license = await db.createLicense(email);
     res.json({
       success: true,
       message: 'License activated successfully',
@@ -141,13 +141,13 @@ app.post('/api/license/activate', (req, res) => {
   }
 });
 
-app.post('/api/license/validate', (req, res) => {
+app.post('/api/license/validate', async (req, res) => {
   try {
     const { licenseKey } = req.body;
     if (!licenseKey) {
       return res.status(400).json({ success: false, message: 'License key is required' });
     }
-    const license = db.validateLicense(licenseKey);
+    const license = await db.validateLicense(licenseKey);
     if (license) {
       res.json({
         success: true,
@@ -167,13 +167,13 @@ app.post('/api/license/validate', (req, res) => {
 });
 
 // Feedback endpoint
-app.post('/api/feedback', (req, res) => {
+app.post('/api/feedback', async (req, res) => {
   try {
     const { email, message } = req.body;
     if (!email || !message) {
       return res.status(400).json({ success: false, message: 'Email and message are required' });
     }
-    const feedback = db.addFeedback(email, message);
+    const feedback = await db.addFeedback(email, message);
     res.json({
       success: true,
       message: 'Thank you for your feedback! We will get back to you shortly.',

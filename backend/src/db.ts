@@ -1,11 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { kv } from '@vercel/kv';
 
 const isVercel = !!process.env.VERCEL;
-const DATA_FILE = isVercel
-  ? path.join('/tmp', 'data.json')
-  : path.join(__dirname, '..', 'data.json');
-
+const DATA_FILE = path.join(__dirname, '..', 'data.json');
 
 export interface UserSettings {
   userId: string;
@@ -65,6 +63,7 @@ const initialData: DBData = {
   feedback: []
 };
 
+// Local File Helpers
 function readDB(): DBData {
   try {
     if (!fs.existsSync(DATA_FILE)) {
@@ -87,35 +86,93 @@ function writeDB(data: DBData): void {
   }
 }
 
+// Vercel KV Initializer (Prepopulate demo keys if not present)
+async function ensureKVPooled(): Promise<void> {
+  try {
+    const initialized = await kv.get<boolean>('hc:initialized');
+    if (!initialized) {
+      // Set the demo licenses in KV
+      for (const [key, license] of Object.entries(initialData.licenses)) {
+        await kv.hset('hc:licenses', { [key]: license });
+      }
+      await kv.set('hc:initialized', true);
+    }
+  } catch (error) {
+    console.error('Failed to initialize Vercel KV', error);
+  }
+}
+
 export const db = {
-  getSettings: (userId: string): UserSettings => {
-    const data = readDB();
-    if (!data.settings[userId]) {
-      data.settings[userId] = DEFAULT_SETTINGS(userId);
+  getSettings: async (userId: string): Promise<UserSettings> => {
+    if (isVercel) {
+      try {
+        let settings = await kv.hget<UserSettings>('hc:settings', userId);
+        if (!settings) {
+          settings = DEFAULT_SETTINGS(userId);
+          await kv.hset('hc:settings', { [userId]: settings });
+        }
+        return settings;
+      } catch (error) {
+        console.error('KV getSettings error', error);
+        return DEFAULT_SETTINGS(userId);
+      }
+    } else {
+      const data = readDB();
+      if (!data.settings[userId]) {
+        data.settings[userId] = DEFAULT_SETTINGS(userId);
+        writeDB(data);
+      }
+      return data.settings[userId];
+    }
+  },
+
+  updateSettings: async (userId: string, updates: Partial<UserSettings>): Promise<UserSettings> => {
+    if (isVercel) {
+      try {
+        let current = await kv.hget<UserSettings>('hc:settings', userId);
+        if (!current) {
+          current = DEFAULT_SETTINGS(userId);
+        }
+        const updated = { ...current, ...updates };
+        await kv.hset('hc:settings', { [userId]: updated });
+        return updated;
+      } catch (error) {
+        console.error('KV updateSettings error', error);
+        throw error;
+      }
+    } else {
+      const data = readDB();
+      const current = data.settings[userId] || DEFAULT_SETTINGS(userId);
+      data.settings[userId] = { ...current, ...updates };
       writeDB(data);
+      return data.settings[userId];
     }
-    return data.settings[userId];
   },
 
-  updateSettings: (userId: string, updates: Partial<UserSettings>): UserSettings => {
-    const data = readDB();
-    const current = data.settings[userId] || DEFAULT_SETTINGS(userId);
-    data.settings[userId] = { ...current, ...updates };
-    writeDB(data);
-    return data.settings[userId];
-  },
-
-  validateLicense: (licenseKey: string): License | null => {
-    const data = readDB();
-    const license = data.licenses[licenseKey];
-    if (license && license.status === 'active') {
-      return license;
+  validateLicense: async (licenseKey: string): Promise<License | null> => {
+    if (isVercel) {
+      try {
+        await ensureKVPooled();
+        const license = await kv.hget<License>('hc:licenses', licenseKey);
+        if (license && license.status === 'active') {
+          return license;
+        }
+        return null;
+      } catch (error) {
+        console.error('KV validateLicense error', error);
+        return null;
+      }
+    } else {
+      const data = readDB();
+      const license = data.licenses[licenseKey];
+      if (license && license.status === 'active') {
+        return license;
+      }
+      return null;
     }
-    return null;
   },
 
-  createLicense: (email: string): License => {
-    const data = readDB();
+  createLicense: async (email: string): Promise<License> => {
     const licenseKey = `HC-PRO-${Math.random().toString(36).substring(2, 7).toUpperCase()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
     const newLicense: License = {
       licenseKey,
@@ -123,21 +180,45 @@ export const db = {
       status: 'active',
       createdAt: new Date().toISOString()
     };
-    data.licenses[licenseKey] = newLicense;
-    writeDB(data);
-    return newLicense;
+
+    if (isVercel) {
+      try {
+        await ensureKVPooled();
+        await kv.hset('hc:licenses', { [licenseKey]: newLicense });
+        return newLicense;
+      } catch (error) {
+        console.error('KV createLicense error', error);
+        throw error;
+      }
+    } else {
+      const data = readDB();
+      data.licenses[licenseKey] = newLicense;
+      writeDB(data);
+      return newLicense;
+    }
   },
 
-  addFeedback: (email: string, message: string): Feedback => {
-    const data = readDB();
+  addFeedback: async (email: string, message: string): Promise<Feedback> => {
     const newFeedback: Feedback = {
       id: Math.random().toString(36).substring(2, 11),
       email,
       message,
       createdAt: new Date().toISOString()
     };
-    data.feedback.push(newFeedback);
-    writeDB(data);
-    return newFeedback;
+
+    if (isVercel) {
+      try {
+        await kv.rpush('hc:feedback', newFeedback);
+        return newFeedback;
+      } catch (error) {
+        console.error('KV addFeedback error', error);
+        throw error;
+      }
+    } else {
+      const data = readDB();
+      data.feedback.push(newFeedback);
+      writeDB(data);
+      return newFeedback;
+    }
   }
 };
