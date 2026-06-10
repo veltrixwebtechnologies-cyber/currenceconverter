@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import './App.css';
 
 // Configurable API base url
@@ -603,6 +604,7 @@ export default function App() {
           </form>
         </div>
       </div>
+      <Analytics />
     </>
   );
 }
