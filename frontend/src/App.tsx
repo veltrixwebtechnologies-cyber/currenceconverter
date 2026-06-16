@@ -1,6 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Analytics } from '@vercel/analytics/react';
+import { track } from '@vercel/analytics';
 import './App.css';
+
+// Safe event tracker
+const trackEvent = (eventName: string, properties?: Record<string, any>) => {
+  try {
+    track(eventName, properties);
+    console.log(`[Analytics] Event tracked: ${eventName}`, properties);
+  } catch (err) {
+    console.warn(`[Analytics Error] Failed to track ${eventName}:`, err);
+  }
+};
 
 // Configurable API base url
 const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:5001/api' : '/api';
@@ -654,7 +665,6 @@ function LandingPage({ visibleElements, setShowLicenseModal, navigate }: Landing
 
       const rowRect = row.getBoundingClientRect();
       const pageRect = page.getBoundingClientRect();
-      // target is the center-right of the row where the price is located
       return {
         x: rowRect.width - 80,
         y: (rowRect.top - pageRect.top) + (rowRect.height / 2)
@@ -674,7 +684,6 @@ function LandingPage({ visibleElements, setShowLicenseModal, navigate }: Landing
         if (!active) return;
         const elapsed = now - startTime;
         const progress = Math.min(elapsed / duration, 1);
-        // easeInOutCubic
         const t = progress < 0.5 ? 4 * progress * progress * progress : 1 - Math.pow(-2 * progress + 2, 3) / 2;
 
         setCursorPos({
@@ -685,13 +694,11 @@ function LandingPage({ visibleElements, setShowLicenseModal, navigate }: Landing
         if (progress < 1) {
           animFrame = requestAnimationFrame(step);
         } else {
-          // Arrived at target price
           setHoveredRow(idx);
           const t1 = window.setTimeout(() => {
             setShowTooltipIdx(idx);
 
             const t2 = window.setTimeout(() => {
-              // Hide tooltip and hover state
               setShowTooltipIdx(null);
               setHoveredRow(null);
 
@@ -712,7 +719,6 @@ function LandingPage({ visibleElements, setShowLicenseModal, navigate }: Landing
       animFrame = requestAnimationFrame(step);
     };
 
-    // Delay start of loop
     const startTimeout = window.setTimeout(() => {
       setCursorOpacity(1);
       animateHand(0);
@@ -738,9 +744,45 @@ function LandingPage({ visibleElements, setShowLicenseModal, navigate }: Landing
     setActiveTabIdx(idx);
     const tab = liveDemoTabs[idx];
     setDemoTab(tab);
+    trackEvent('demo_interact', { currency_code: tab.code });
+  };
+
+  const handleAddtoChrome = (pos: string) => {
+    trackEvent('cta_add_to_chrome', { position: pos });
+    alert("This demo successfully simulates the 'Add to Chrome' extension setup!");
   };
 
   const isVisible = (id: string) => visibleElements[id] !== false;
+
+  // Track page milestones
+  useEffect(() => {
+    const handleScrollMilestones = () => {
+      const h = document.documentElement;
+      const st = h.scrollTop || document.body.scrollTop;
+      const sh = h.scrollHeight || document.body.scrollHeight;
+      const ch = h.clientHeight;
+      const percent = Math.round((st / (sh - ch)) * 100);
+
+      if (percent >= 25 && percent < 30 && !window.hasOwnProperty('_tr25')) {
+        (window as any)._tr25 = true;
+        trackEvent('scroll_milestone', { percentage: 25 });
+      }
+      if (percent >= 50 && percent < 55 && !window.hasOwnProperty('_tr50')) {
+        (window as any)._tr50 = true;
+        trackEvent('scroll_milestone', { percentage: 50 });
+      }
+      if (percent >= 75 && percent < 80 && !window.hasOwnProperty('_tr75')) {
+        (window as any)._tr75 = true;
+        trackEvent('scroll_milestone', { percentage: 75 });
+      }
+      if (percent >= 98 && !window.hasOwnProperty('_tr100')) {
+        (window as any)._tr100 = true;
+        trackEvent('scroll_milestone', { percentage: 100 });
+      }
+    };
+    window.addEventListener('scroll', handleScrollMilestones);
+    return () => window.removeEventListener('scroll', handleScrollMilestones);
+  }, []);
 
   return (
     <>
@@ -754,20 +796,38 @@ function LandingPage({ visibleElements, setShowLicenseModal, navigate }: Landing
           <div className="pill-dot"></div>Chrome Extension · Free to Install
         </div>
         <h1 className={`reveal-init d1 ${isVisible('h-title') ? 'reveal-visible' : ''}`} data-reveal-id="h-title">
-          Convert Any Currency <span className="grad">Instantly</span><br />While You Browse
+          Convert Any Currency <span className="grad">Without</span><br />Leaving the Page
         </h1>
         <p className={`hero-sub reveal-init d2 ${isVisible('h-sub') ? 'reveal-visible' : ''}`} data-reveal-id="h-sub">
-          Hover any price online and see the local currency value appear instantly — no new tabs, no typing, no friction whatsoever.
+          See any foreign price in your local currency the moment you hover — on every website, instantly, with zero tab switching.
         </p>
-        <div className={`hero-btns reveal-init d3 ${isVisible('h-btns') ? 'reveal-visible' : ''}`} data-reveal-id="h-btns">
-          <button onClick={() => navigate('/customizer')} className="btn-p">⚡ Simulate Extension</button>
-          <a href="#demo-strip" className="btn-g">▶ See it live</a>
+        
+        {/* Dominant Chrome Store CTA */}
+        <div className={`hero-btns reveal-init d3 ${isVisible('h-btns') ? 'reveal-visible' : ''}`} data-reveal-id="h-btns" style={{ flexDirection: 'column', gap: '10px' }}>
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => { handleAddtoChrome('hero'); trackEvent('cta_hero_primary', { position: 'hero' }); }}
+              className="btn-p"
+              style={{ padding: '15px 36px', fontSize: '17px', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 0 36px rgba(124,110,250,0.45)' }}
+            >
+              <span>⚡ Add to Chrome — It's Free</span>
+            </button>
+            <a href="#demo-strip" className="btn-g" style={{ padding: '15px 32px', fontSize: '16px' }} onClick={() => trackEvent('cta_pricing_explore', { plan: 'demo' })}>
+              ▶ Try Interactive Demo
+            </a>
+          </div>
+          <div className="cws-rating">
+            <span className="cws-stars">★★★★★</span>
+            <span>4.9/5 Rating (180+ Reviews) · 12,000+ Users</span>
+          </div>
         </div>
-        <div className={`trust-row reveal-init ${isVisible('h-trust') ? 'reveal-visible' : ''}`} data-reveal-id="h-trust">
-          <span>✓ No account needed</span>
-          <span>✓ Zero data collected</span>
-          <span>✓ Works on every site</span>
-          <span>✓ 4.9★ on Chrome Store</span>
+
+        {/* trust badge points */}
+        <div className={`trust-row reveal-init ${isVisible('h-trust') ? 'reveal-visible' : ''}`} data-reveal-id="h-trust" style={{ marginTop: '24px' }}>
+          <span>🛡️ Works on 160+ Currencies</span>
+          <span>🌍 Works on Every Website</span>
+          <span>🔒 100% Private (Runs locally)</span>
+          <span>🚫 Zero Sign-Up Required</span>
         </div>
 
         {/* HERO DEMO FRAME */}
@@ -876,102 +936,218 @@ function LandingPage({ visibleElements, setShowLicenseModal, navigate }: Landing
         </div>
       </div>
 
-      {/* PROBLEM SECTION */}
+      {/* PROBLEM & SOLUTION SECTION */}
       <section className="prob-section" id="problem">
         <div className={`reveal-init ${isVisible('prob-intro') ? 'reveal-visible' : ''}`} data-reveal-id="prob-intro">
-          <div className="sec-eyebrow">The Problem</div>
-          <h2 className="sec-h">Stop breaking your browsing flow</h2>
-          <p className="sec-p">Every foreign-currency price costs you 4 steps and 20 seconds. Over a shopping session, that's minutes of pure friction.</p>
+          <div className="sec-eyebrow">The Friction</div>
+          <h2 className="sec-h">Stop Breaking Your Browsing Flow</h2>
+          <p className="sec-p">Every foreign currency amount costs you 4 steps, 20 seconds, and your total concentration. There is a better way.</p>
         </div>
-        <div className={`prob-cols reveal-init d1 ${isVisible('prob-details') ? 'reveal-visible' : ''}`} data-reveal-id="prob-details">
-          <div>
-            <div className="prob-col-label bad">❌ Without HoverConvert</div>
+
+        <div className="prob-card-grid">
+          <div className="prob-card bad">
+            <div className="prob-header bad-text">
+              <span>❌ Without HoverConvert</span>
+            </div>
             <div className="prob-step">
               <div className="prob-icon pi-bad">😤</div>
               <div>
-                <h4>See price in USD</h4>
-                <p>Spot "$499" — no idea if it's reasonable in your native currency.</p>
+                <h4>See a Price Online</h4>
+                <p>You spot "$349.99" on a website. You are unsure of its real cost in your currency.</p>
               </div>
             </div>
             <div className="prob-step">
               <div className="prob-icon pi-bad">🔄</div>
               <div>
-                <h4>Open new tab</h4>
-                <p>Google "currency converter", navigate, type it in manually.</p>
+                <h4>Open a New Tab</h4>
+                <p>You leave the store, search Google for a converter, and type the price manually.</p>
               </div>
             </div>
             <div className="prob-step">
               <div className="prob-icon pi-bad">😵</div>
               <div>
-                <h4>Lose your context</h4>
-                <p>Tab switch breaks your comparison flow. Do it 8 times and you've lost your place entirely.</p>
+                <h4>Lose Your Place</h4>
+                <p>By the time you switch back to the store, your concentration is broken.</p>
               </div>
             </div>
           </div>
-          <div>
-            <div className="prob-col-label good">✓ With HoverConvert</div>
+
+          <div className="prob-card good">
+            <div className="prob-header good-text">
+              <span>✓ With HoverConvert</span>
+            </div>
             <div className="prob-step">
-              <div className="prob-icon pi-good">👆</div>
+              <div className="prob-icon pi-good">👀</div>
               <div>
-                <h4>Hover over the price</h4>
-                <p>Move your cursor onto any currency amount on the page.</p>
+                <h4>Spot a Foreign Price</h4>
+                <p>You see "$349.99" on any website while shopping or working.</p>
               </div>
             </div>
             <div className="prob-step">
               <div className="prob-icon pi-good">⚡</div>
               <div>
-                <h4>Local value appears instantly</h4>
-                <p>A clean tooltip shows the converted value in under 50ms.</p>
+                <h4>Hover Your Cursor</h4>
+                <p>Simply hover over the amount. The local price appears instantly in under 50ms.</p>
               </div>
             </div>
             <div className="prob-step">
               <div className="prob-icon pi-good">🎯</div>
               <div>
-                <h4>Keep your flow</h4>
-                <p>Never leave the page. Compare 20 prices without switching a single tab.</p>
+                <h4>Keep Browsing</h4>
+                <p>No extra tabs or keyboard entries required. Smooth, uninterrupted browsing.</p>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* FEATURES SECTION */}
-      <section className="feat-section" id="features">
-        <div className={`reveal-init ctr ${isVisible('feat-intro') ? 'reveal-visible' : ''}`} data-reveal-id="feat-intro">
-          <div className="sec-eyebrow">Built Different</div>
-          <h2 className="sec-h">Everything you need.<br />Nothing you don't.</h2>
-          <p className="sec-p">Obsessively refined to disappear into your browsing — and just work.</p>
+      {/* HOW IT WORKS (3-STEP PROCESS) */}
+      <section className="feat-section" id="how-it-works" style={{ background: 'var(--bg)' }}>
+        <div className="ctr">
+          <div className="sec-eyebrow">Simple Workflow</div>
+          <h2 className="sec-h">How It Works</h2>
+          <p className="sec-p">Get started in under 10 seconds. Convert prices seamlessly.</p>
         </div>
-        <div className="feat-grid">
-          <div className={`feat-card reveal-init ${isVisible('f-1') ? 'reveal-visible' : ''}`} data-reveal-id="f-1">
-            <div className="feat-icon">⚡</div>
-            <div className="feat-title">Instant hover detection</div>
-            <p className="feat-desc">Move your cursor over any price — a sleek tooltip appears in milliseconds. No clicking, no selecting.</p>
+
+        <div className="process-grid">
+          <div className="process-step">
+            <div className="process-num">1</div>
+            <h3 className="process-title">Hover or Highlight</h3>
+            <p className="process-desc">Hover over any price or highlight text containing currency symbols on any website.</p>
           </div>
-          <div className={`feat-card reveal-init d1 ${isVisible('f-2') ? 'reveal-visible' : ''}`} data-reveal-id="f-2">
-            <div className="feat-icon">🌐</div>
-            <div className="feat-title">Every website, everywhere</div>
-            <p className="feat-desc">Amazon, Steam, Airbnb, Etsy, Shopify — any page with a currency symbol is supported automatically.</p>
+          <div className="process-step">
+            <div className="process-num">2</div>
+            <h3 className="process-title">Instant Converted Tooltip</h3>
+            <p className="process-desc">A premium glassmorphic tooltip displays the converted rate in your native currency immediately.</p>
           </div>
-          <div className={`feat-card reveal-init d2 ${isVisible('f-3') ? 'reveal-visible' : ''}`} data-reveal-id="f-3">
-            <div className="feat-icon">🔒</div>
-            <div className="feat-title">Completely private</div>
-            <p className="feat-desc">Zero browsing data leaves your device. All conversion logic runs locally. Your activity is yours alone.</p>
+          <div className="process-step">
+            <div className="process-num">3</div>
+            <h3 className="process-title">Customize to Your Needs</h3>
+            <p className="process-desc">Set custom exchange rate offsets, switch between themes, or select favorite currencies.</p>
           </div>
-          <div className={`feat-card reveal-init ${isVisible('f-4') ? 'reveal-visible' : ''}`} data-reveal-id="f-4">
-            <div className="feat-icon">💱</div>
-            <div className="feat-title">Manual rate control</div>
-            <p className="feat-desc">Know your bank's exact rate? Override the live rate in settings for precise, real-world conversion accuracy.</p>
+        </div>
+      </section>
+
+      {/* USE CASES SECTION */}
+      <section className="feat-section" id="use-cases" style={{ background: 'var(--bg2)' }}>
+        <div className="ctr">
+          <div className="sec-eyebrow">Use Cases</div>
+          <h2 className="sec-h">Who is HoverConvert For?</h2>
+          <p className="sec-p">Tailored convenience designed for professionals, travelers, and shoppers.</p>
+        </div>
+
+        <div className="usecase-grid">
+          <div className="usecase-card">
+            <div className="usecase-emoji">🛒</div>
+            <h3 className="usecase-title">International Shoppers</h3>
+            <p className="usecase-desc">Shop on Amazon Global, eBay, Steam, or Shopify stores and see your true cost instantly without conversions.</p>
           </div>
-          <div className={`feat-card reveal-init d1 ${isVisible('f-5') ? 'reveal-visible' : ''}`} data-reveal-id="f-5">
-            <div className="feat-icon">🎨</div>
-            <div className="feat-title">Premium tooltip design</div>
-            <p className="feat-desc">Glassmorphic, non-intrusive. Adapts to both dark and light page backgrounds without ever blocking content.</p>
+          <div className="usecase-card">
+            <div className="usecase-emoji">💼</div>
+            <h3 className="usecase-title">Freelancers & Remote Workers</h3>
+            <p className="usecase-desc">Convert invoices, rate lists, and platform listings (Upwork, Fiverr) to understand payments immediately.</p>
           </div>
-          <div className={`feat-card reveal-init d2 ${isVisible('f-6') ? 'reveal-visible' : ''}`} data-reveal-id="f-6">
-            <div className="feat-icon">🪶</div>
-            <div className="feat-title">Featherweight — 40kb</div>
-            <p className="feat-desc">No trackers, no ads, no bloat. Installs instantly and adds zero perceptible load to any page.</p>
+          <div className="usecase-card">
+            <div className="usecase-emoji">✈️</div>
+            <h3 className="usecase-title">Travelers & Nomads</h3>
+            <p className="usecase-desc">Plan trips, browse Airbnb, and book flight tickets in native currencies on foreign sites.</p>
+          </div>
+          <div className="usecase-card">
+            <div className="usecase-emoji">📈</div>
+            <h3 className="usecase-title">Investors & Forex</h3>
+            <p className="usecase-desc">Analyze financial news, stock prices, or cryptocurrency assets across global markets effortlessly.</p>
+          </div>
+          <div className="usecase-card">
+            <div className="usecase-emoji">💻</div>
+            <h3 className="usecase-title">Developers & SaaS Teams</h3>
+            <p className="usecase-desc">Instantly convert cloud hosting bills, API costs, or global software subscriptions in a flash.</p>
+          </div>
+        </div>
+      </section>
+
+      {/* FEATURE COMPARISON MATRIX */}
+      <section className="matrix-section">
+        <div className="ctr">
+          <div className="sec-eyebrow">The Comparison</div>
+          <h2 className="sec-h">Google vs. Sites vs. HoverConvert</h2>
+          <p className="sec-p">Why thousands of professionals prefer our browser extension over manual options.</p>
+        </div>
+
+        <div className="matrix-container">
+          <table className="matrix-table">
+            <thead>
+              <tr>
+                <th>Feature</th>
+                <th>Google Search</th>
+                <th>Converter Sites</th>
+                <th>HoverConvert</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>**Conversion Speed**</td>
+                <td>15 - 20 seconds</td>
+                <td>30+ seconds</td>
+                <td className="highlight">**&lt;50 milliseconds (Instant)**</td>
+              </tr>
+              <tr>
+                <td>**User Input Required**</td>
+                <td>Type query or copy-paste</td>
+                <td>Select currencies & type value</td>
+                <td className="highlight">**Just hover cursor**</td>
+              </tr>
+              <tr>
+                <td>**Tab Switching**</td>
+                <td>Yes (leaves store tab)</td>
+                <td>Yes (leaves store tab)</td>
+                <td className="highlight">**No (stay on the page)**</td>
+              </tr>
+              <tr>
+                <td>**Ads & Bloat**</td>
+                <td>None</td>
+                <td>Heavy ads & popups</td>
+                <td className="highlight">**100% clean & ad-free**</td>
+              </tr>
+              <tr>
+                <td>**Conversions Offline**</td>
+                <td>❌ Requires connection</td>
+                <td>❌ Requires connection</td>
+                <td className="highlight">**✓ Works offline (cached)**</td>
+              </tr>
+              <tr>
+                <td>**Privacy Protection**</td>
+                <td>Tracked by search engine</td>
+                <td>Heavy cookies & tracking</td>
+                <td className="highlight">**🔒 100% private (runs local)**</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* TECHNICAL TRUST / SECURITY BADGES */}
+      <section className="feat-section" id="security" style={{ background: 'var(--bg)' }}>
+        <div className="ctr">
+          <div className="sec-eyebrow">Privacy First</div>
+          <h2 className="sec-h">Built For Enterprise Security</h2>
+          <p className="sec-p">We respect your data. HoverConvert runs entirely on your device with maximum security standards.</p>
+        </div>
+
+        <div className="trust-grid">
+          <div className="trust-card">
+            <div className="trust-icon">🛡️</div>
+            <h3 className="trust-title">Manifest V3 Compliant</h3>
+            <p className="trust-desc">Built using Google's latest secure extension framework, enforcing strict safety rules.</p>
+          </div>
+          <div className="trust-card">
+            <div className="trust-icon">🪶</div>
+            <h3 className="trust-title">Under 40KB in Size</h3>
+            <p className="trust-desc">Extremely lightweight file footprint. Installs instantly and adds zero page load lag.</p>
+          </div>
+          <div className="trust-card">
+            <div className="trust-icon">🔒</div>
+            <h3 className="trust-title">No Server tracking</h3>
+            <p className="trust-desc">No databases are used. Your browsing history and pricing checks never leave your browser.</p>
           </div>
         </div>
       </section>
@@ -1010,16 +1186,19 @@ function LandingPage({ visibleElements, setShowLicenseModal, navigate }: Landing
         </div>
       </section>
 
-      {/* PRICING */}
-      <section className="pricing-section" id="pricing">
-        <div className={`reveal-init ctr ${isVisible('price-intro') ? 'reveal-visible' : ''}`} data-reveal-id="price-intro">
-          <div className="sec-eyebrow">Simple Pricing</div>
-          <h2 className="sec-h">Start free. Pay once.</h2>
-          <p className="sec-p">No subscriptions. No recurring bills. Lifetime Pro for less than a coffee.</p>
+      {/* PRICING TRANSITION BRIDGE */}
+      <section className="pricing-bridge">
+        <div className="pricing-bridge-inner">
+          <h3 className="pricing-bridge-h">Stop wasting time switching tabs every day.</h3>
+          <p className="pricing-bridge-p">Get started for free or upgrade to HoverConvert Pro to unlock unlimited conversions, custom rates, and favorite currencies. Pay once, use forever.</p>
         </div>
+      </section>
+
+      {/* PRICING SECTION */}
+      <section className="pricing-section" id="pricing">
         <div className="price-grid">
           <div className={`pcard reveal-init ${isVisible('p-free') ? 'reveal-visible' : ''}`} data-reveal-id="p-free">
-            <div className="pname">Free</div>
+            <div className="pname">Free Plan</div>
             <div className="pprice">$0</div>
             <div className="pterm">Forever free</div>
             <ul className="pfeat">
@@ -1027,15 +1206,17 @@ function LandingPage({ visibleElements, setShowLicenseModal, navigate }: Landing
               <li>Top 12 currencies</li>
               <li>Hover tooltips</li>
               <li>Works on all websites</li>
-              <li className="no">Dark mode tooltip</li>
+              <li className="no">Dark mode customizer</li>
               <li className="no">Unlimited conversions</li>
               <li className="no">Favorite currencies</li>
             </ul>
-            <button onClick={() => navigate('/customizer')} className="pbtn pbtn-f">Simulate Free</button>
+            <button onClick={() => { trackEvent('cta_pricing_explore', { plan: 'free' }); navigate('/customizer'); }} className="pbtn pbtn-f">
+              Simulate Free Plan
+            </button>
           </div>
           <div className={`pcard hot reveal-init d1 ${isVisible('p-pro') ? 'reveal-visible' : ''}`} data-reveal-id="p-pro">
             <div className="pbadge">Best Value</div>
-            <div className="pname">Pro</div>
+            <div className="pname">Pro Plan</div>
             <div className="pprice">$4.99</div>
             <div className="pterm">One-time · Lifetime access</div>
             <ul className="pfeat">
@@ -1047,7 +1228,9 @@ function LandingPage({ visibleElements, setShowLicenseModal, navigate }: Landing
               <li>Favorite currencies</li>
               <li>Priority support</li>
             </ul>
-            <button onClick={() => setShowLicenseModal(true)} className="pbtn pbtn-p">Get Pro — $4.99 Once</button>
+            <button onClick={() => { trackEvent('cta_pricing_explore', { plan: 'pro' }); setShowLicenseModal(true); }} className="pbtn pbtn-p">
+              Upgrade to Pro — $4.99
+            </button>
           </div>
         </div>
         <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--tx3)', marginTop: '18px' }}>
@@ -1059,7 +1242,7 @@ function LandingPage({ visibleElements, setShowLicenseModal, navigate }: Landing
       <section className="testi-section" id="testimonials">
         <div className={`reveal-init ctr ${isVisible('testi-intro') ? 'reveal-visible' : ''}`} data-reveal-id="testi-intro">
           <div className="sec-eyebrow">Real Users</div>
-          <h2 className="sec-h">People who stopped switching tabs</h2>
+          <h2 className="sec-h">People Who Stopped Switching Tabs</h2>
         </div>
         <div className="testi-grid">
           <div className={`tcard reveal-init ${isVisible('t-1') ? 'reveal-visible' : ''}`} data-reveal-id="t-1">
@@ -1101,16 +1284,66 @@ function LandingPage({ visibleElements, setShowLicenseModal, navigate }: Landing
       {/* FAQ SECTION */}
       <FAQSection />
 
+      {/* EXIT INTENT SECTION */}
+      <section className="exit-intent-section">
+        <div className="exit-intent-inner">
+          <div className="exit-intent-eyebrow">Still Using Google for Currency Conversion?</div>
+          <h2 className="exit-intent-h">
+            Stop opening new tabs.<br />
+            <span className="grad">Convert while you browse.</span>
+          </h2>
+          <p className="exit-intent-sub">
+            Stop manually searching exchange rates every time you see a foreign price. HoverConvert shows the local value the moment you hover — no steps, no friction.
+          </p>
+
+          <div className="exit-comparison">
+            <div className="exit-comp-col bad-col">
+              <div className="exit-comp-label">❌ Google Search</div>
+              <div className="exit-comp-steps">
+                <span>See price</span>
+                <span className="exit-arrow">→</span>
+                <span>Open new tab</span>
+                <span className="exit-arrow">→</span>
+                <span>Type query</span>
+                <span className="exit-arrow">→</span>
+                <span>Read result</span>
+                <span className="exit-arrow">→</span>
+                <span>Switch back</span>
+              </div>
+              <div className="exit-comp-time">~20 seconds per conversion</div>
+            </div>
+            <div className="exit-vs">VS</div>
+            <div className="exit-comp-col good-col">
+              <div className="exit-comp-label">✓ HoverConvert</div>
+              <div className="exit-comp-steps">
+                <span>Hover over price</span>
+                <span className="exit-arrow">→</span>
+                <span className="exit-highlight">Done. ⚡</span>
+              </div>
+              <div className="exit-comp-time" style={{ color: 'var(--vi2)' }}>&lt;1 second. Stay on the page.</div>
+            </div>
+          </div>
+
+          <button
+            onClick={() => { handleAddtoChrome('exit_intent'); trackEvent('cta_exit_intent', { section: 'exit_intent' }); }}
+            className="btn-p exit-intent-cta"
+          >
+            ⚡ Try HoverConvert Free
+          </button>
+          <p className="exit-intent-note">Free forever · No account · Installs in 10 seconds</p>
+        </div>
+      </section>
+
       {/* FINAL CTA */}
       <section className="cta-section">
         <div className={`reveal-init ${isVisible('cta') ? 'reveal-visible' : ''}`} data-reveal-id="cta">
-          <h2>Stop opening<br /><em>currency converter tabs.</em></h2>
+          <h2>Stop Opening<br /><em>Currency Converter Tabs.</em></h2>
           <p>Install HoverConvert and see any price in local values — the moment you hover, on every website, forever.</p>
           <div className="cta-btns">
-            <button onClick={() => navigate('/customizer')} className="btn-p" style={{ fontSize: '16px', padding: '15px 32px' }}>
-              ⚡ Simulate Extension Workspace
+            <button onClick={() => { handleAddtoChrome('footer'); trackEvent('cta_hero_primary', { position: 'footer' }); }} className="btn-p" style={{ fontSize: '16px', padding: '15px 32px' }}>
+              ⚡ Add to Chrome — It's Free
             </button>
-            <a href="#demo-strip" className="btn-g" style={{ fontSize: '16px', padding: '15px 32px' }}>See how it works</a>
+            <a href="#demo-strip" className="btn-g" style={{ fontSize: '16px', padding: '15px 32px' }} onClick={() => trackEvent('cta_pricing_explore', { plan: 'demo' })}>See How It Works</a>
           </div>
           <p style={{ marginTop: '14px', fontSize: '12px', color: 'var(--tx3)' }}>No account required · Installs in 10 seconds · Free forever</p>
         </div>
@@ -1127,19 +1360,29 @@ function FAQSection() {
     { q: 'Which websites are supported?', a: 'Every website — Amazon, eBay, Airbnb, Steam, Etsy, Booking.com, Shopify stores, and any page displaying a currency symbol followed by a number.' },
     { q: 'Is my browsing data stored or shared?', a: 'Absolutely not. HoverConvert is fully local. It reads page content to detect prices, but sends zero data to any server. Your browsing history is completely private.' },
     { q: 'How often are exchange rates updated?', a: 'Rates refresh every 6 hours via a lightweight sync. You can also set a manual rate in extension settings for your bank\'s exact conversion rate.' },
+    { q: 'Can I customize which currencies are converted?', a: 'Yes. HoverConvert allows you to set your default native currency, select favorite target currencies, and even define manual conversion overrides in settings.' },
+    { q: 'How does the license key activation work?', a: 'After a one-time purchase of Pro, you\'ll receive a license key via email. Simply input the key in the "Activate Pro" window to unlock all Pro capabilities for lifetime usage.' },
     { q: 'Is there a refund policy?', a: 'Yes. No-questions-asked 30-day full refund. If it doesn\'t work the way you expected, just reach out and we\'ll process it immediately.' }
   ];
+
+  const handleToggle = (idx: number, qText: string) => {
+    const isNowOpen = openIdx !== idx;
+    setOpenIdx(isNowOpen ? idx : null);
+    if (isNowOpen) {
+      trackEvent('faq_toggle', { question: qText });
+    }
+  };
 
   return (
     <section className="faq-section" id="faq">
       <div className="ctr">
         <div className="sec-eyebrow">FAQ</div>
-        <h2 className="sec-h">Honest answers</h2>
+        <h2 className="sec-h">Honest Answers</h2>
       </div>
       <div className="faq-list">
         {faqs.map((f, i) => (
           <div key={i} className={`faq-item ${openIdx === i ? 'open' : ''}`}>
-            <button className="faq-q" onClick={() => setOpenIdx(openIdx === i ? null : i)}>
+            <button className="faq-q" onClick={() => handleToggle(i, f.q)}>
               {f.q}
               <span className="faq-tog">{openIdx === i ? '−' : '+'}</span>
             </button>

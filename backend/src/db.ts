@@ -46,20 +46,7 @@ const DEFAULT_SETTINGS = (userId: string): UserSettings => ({
 // Prepopulate database with some license keys for testing/demo
 const initialData: DBData = {
   settings: {},
-  licenses: {
-    'HC-PRO-DEMO-12345': {
-      licenseKey: 'HC-PRO-DEMO-12345',
-      email: 'demo@hoverconvert.com',
-      status: 'active',
-      createdAt: new Date().toISOString()
-    },
-    'HC-PRO-TEST-99999': {
-      licenseKey: 'HC-PRO-TEST-99999',
-      email: 'tester@hoverconvert.com',
-      status: 'active',
-      createdAt: new Date().toISOString()
-    }
-  },
+  licenses: {},
   feedback: []
 };
 
