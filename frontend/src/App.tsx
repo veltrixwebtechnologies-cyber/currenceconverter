@@ -148,7 +148,7 @@ export default function App() {
 
   // Check premium status via Clerk auth when user loads
   useEffect(() => {
-    if (!clerkIsLoaded || premiumChecked) return;
+    if (!clerkIsLoaded) return;
 
     const checkPremium = async () => {
       try {
@@ -159,11 +159,10 @@ export default function App() {
         }
         const res = await fetch(`${API_BASE}/check-premium`, { headers });
         const data = await res.json() as { premium: boolean; plan: string; dailyLimit: number | null };
-        if (data.premium) {
-          setIsPro(true);
-        }
+        setIsPro(!!data.premium);
       } catch (err) {
         console.warn('Premium check failed, defaulting to free tier:', err);
+        setIsPro(false);
       } finally {
         setPremiumChecked(true);
       }
@@ -1277,9 +1276,15 @@ function LandingPage({ visibleElements, navigate }: LandingProps) {
               <li>Favorite currencies</li>
               <li>Priority support</li>
             </ul>
-            <button onClick={() => { trackEvent('cta_pricing_explore', { plan: 'pro' }); navigate('/pricing'); }} className="pbtn pbtn-p">
-              Upgrade to Pro — $4.99
-            </button>
+            {isPro ? (
+              <button className="pbtn pbtn-p" style={{ background: 'var(--success)', cursor: 'default' }}>
+                ✓ Lifetime Active
+              </button>
+            ) : (
+              <button onClick={() => { trackEvent('cta_pricing_explore', { plan: 'pro' }); navigate('/pricing'); }} className="pbtn pbtn-p">
+                Upgrade to Pro — $4.99
+              </button>
+            )}
           </div>
         </div>
         <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--tx3)', marginTop: '18px' }}>
