@@ -118,6 +118,24 @@ async function ensureKVPooled(): Promise<void> {
 }
 
 export const db = {
+  getRedisStatus: async (): Promise<{ initialized: boolean; connected: boolean; error: string | null }> => {
+    let connected = false;
+    let error: string | null = null;
+    if (redisClient) {
+      try {
+        await redisClient.ping();
+        connected = true;
+      } catch (err: any) {
+        error = err.message || String(err);
+      }
+    }
+    return {
+      initialized: !!redisClient,
+      connected,
+      error
+    };
+  },
+
   getSettings: async (userId: string): Promise<UserSettings> => {
     if (redisClient) {
       try {

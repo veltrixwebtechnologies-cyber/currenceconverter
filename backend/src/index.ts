@@ -369,10 +369,27 @@ app.post('/api/create-checkout', async (req, res) => {
   }
 });
 
-// ── Health check ──────────────────────────────────────────────────────────────
-
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
+});
+
+app.get('/api/diagnostics', async (req, res) => {
+  const redisUrlSet = !!process.env.REDIS_URL;
+  const redisStatus = await db.getRedisStatus();
+
+  res.json({
+    status: 'diagnostic_info',
+    time: new Date().toISOString(),
+    env: {
+      CLERK_SECRET_KEY_PRESENT: !!process.env.CLERK_SECRET_KEY,
+      DODO_API_KEY_PRESENT: !!process.env.DODO_API_KEY,
+      DODO_PRODUCT_ID_PRESENT: !!process.env.DODO_PRODUCT_ID,
+      DODO_WEBHOOK_SECRET_PRESENT: !!process.env.DODO_WEBHOOK_SECRET,
+      REDIS_URL_PRESENT: redisUrlSet,
+      VERCEL_ENV: process.env.VERCEL || 'not_vercel',
+    },
+    redis: redisStatus
+  });
 });
 
 // ── Start Server ──────────────────────────────────────────────────────────────
