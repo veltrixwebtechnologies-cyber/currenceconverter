@@ -20,7 +20,7 @@ const trackEvent = (eventName: string, properties?: Record<string, any>) => {
 };
 
 // Configurable API base url
-const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:5001/api' : '/api';
+const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://localhost:5001/api' : '/api';
 
 interface UserSettings {
   userId: string;
