@@ -1,9 +1,22 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { kv } from '@vercel/kv';
+import { createClient } from 'redis';
 
 const isVercel = !!process.env.VERCEL;
 const DATA_FILE = path.join(__dirname, '..', 'data.json');
+
+// Initialize standard Redis client if REDIS_URL is provided
+let redisClient: any = null;
+if (process.env.REDIS_URL) {
+  console.log('Initializing standard Redis client with REDIS_URL');
+  redisClient = createClient({
+    url: process.env.REDIS_URL
+  });
+  redisClient.connect().catch((err: any) => {
+    console.error('Redis client connection error:', err);
+  });
+}
 
 export interface UserSettings {
   userId: string;
@@ -91,18 +104,35 @@ function writeDB(data: DBData): void {
 // Vercel KV Initializer
 async function ensureKVPooled(): Promise<void> {
   try {
-    const initialized = await kv.get<boolean>('hc:initialized');
-    if (!initialized) {
-      await kv.set('hc:initialized', true);
+    if (redisClient) {
+      await redisClient.set('hc:initialized', 'true');
+    } else {
+      const initialized = await kv.get<boolean>('hc:initialized');
+      if (!initialized) {
+        await kv.set('hc:initialized', true);
+      }
     }
   } catch (error) {
-    console.error('Failed to initialize Vercel KV', error);
+    console.error('Failed to initialize KV/Redis', error);
   }
 }
 
 export const db = {
   getSettings: async (userId: string): Promise<UserSettings> => {
-    if (isVercel) {
+    if (redisClient) {
+      try {
+        const val = await redisClient.hGet('hc:settings', userId);
+        let settings = val ? JSON.parse(val) : null;
+        if (!settings) {
+          settings = DEFAULT_SETTINGS(userId);
+          await redisClient.hSet('hc:settings', userId, JSON.stringify(settings));
+        }
+        return settings;
+      } catch (error) {
+        console.error('Redis getSettings error', error);
+        return DEFAULT_SETTINGS(userId);
+      }
+    } else if (isVercel) {
       try {
         let settings = await kv.hget<UserSettings>('hc:settings', userId);
         if (!settings) {
@@ -125,7 +155,18 @@ export const db = {
   },
 
   updateSettings: async (userId: string, updates: Partial<UserSettings>): Promise<UserSettings> => {
-    if (isVercel) {
+    if (redisClient) {
+      try {
+        const val = await redisClient.hGet('hc:settings', userId);
+        let current = val ? JSON.parse(val) : DEFAULT_SETTINGS(userId);
+        const updated = { ...current, ...updates };
+        await redisClient.hSet('hc:settings', userId, JSON.stringify(updated));
+        return updated;
+      } catch (error) {
+        console.error('Redis updateSettings error', error);
+        throw error;
+      }
+    } else if (isVercel) {
       try {
         let current = await kv.hget<UserSettings>('hc:settings', userId);
         if (!current) {
@@ -148,7 +189,19 @@ export const db = {
   },
 
   validateLicense: async (licenseKey: string): Promise<License | null> => {
-    if (isVercel) {
+    if (redisClient) {
+      try {
+        const val = await redisClient.hGet('hc:licenses', licenseKey);
+        const license = val ? JSON.parse(val) : null;
+        if (license && license.status === 'active') {
+          return license;
+        }
+        return null;
+      } catch (error) {
+        console.error('Redis validateLicense error', error);
+        return null;
+      }
+    } else if (isVercel) {
       try {
         await ensureKVPooled();
         const license = await kv.hget<License>('hc:licenses', licenseKey);
@@ -179,7 +232,15 @@ export const db = {
       createdAt: new Date().toISOString()
     };
 
-    if (isVercel) {
+    if (redisClient) {
+      try {
+        await redisClient.hSet('hc:licenses', licenseKey, JSON.stringify(newLicense));
+        return newLicense;
+      } catch (error) {
+        console.error('Redis createLicense error', error);
+        throw error;
+      }
+    } else if (isVercel) {
       try {
         await ensureKVPooled();
         await kv.hset('hc:licenses', { [licenseKey]: newLicense });
@@ -204,7 +265,15 @@ export const db = {
       createdAt: new Date().toISOString()
     };
 
-    if (isVercel) {
+    if (redisClient) {
+      try {
+        await redisClient.rPush('hc:feedback', JSON.stringify(newFeedback));
+        return newFeedback;
+      } catch (error) {
+        console.error('Redis addFeedback error', error);
+        throw error;
+      }
+    } else if (isVercel) {
       try {
         await kv.rpush('hc:feedback', newFeedback);
         return newFeedback;
@@ -223,7 +292,15 @@ export const db = {
   // ── Subscription methods (Clerk + Dodo) ──────────────────────────────────
 
   getSubscription: async (clerkUserId: string): Promise<UserSubscription | null> => {
-    if (isVercel) {
+    if (redisClient) {
+      try {
+        const val = await redisClient.hGet('hc:subscriptions', clerkUserId);
+        return val ? JSON.parse(val) : null;
+      } catch (error) {
+        console.error('Redis getSubscription error', error);
+        return null;
+      }
+    } else if (isVercel) {
       try {
         const sub = await kv.hget<UserSubscription>('hc:subscriptions', clerkUserId);
         return sub || null;
@@ -247,7 +324,12 @@ export const db = {
     const isPremium = plan === 'pro_lifetime';
 
     let existing: UserSubscription | null = null;
-    if (isVercel) {
+    if (redisClient) {
+      try {
+        const val = await redisClient.hGet('hc:subscriptions', clerkUserId);
+        existing = val ? JSON.parse(val) : null;
+      } catch (_) {}
+    } else if (isVercel) {
       try {
         existing = await kv.hget<UserSubscription>('hc:subscriptions', clerkUserId);
       } catch (_) {}
@@ -266,7 +348,14 @@ export const db = {
       updatedAt: now
     };
 
-    if (isVercel) {
+    if (redisClient) {
+      try {
+        await redisClient.hSet('hc:subscriptions', clerkUserId, JSON.stringify(subscription));
+      } catch (error) {
+        console.error('Redis upsertSubscription error', error);
+        throw error;
+      }
+    } else if (isVercel) {
       try {
         await kv.hset('hc:subscriptions', { [clerkUserId]: subscription });
       } catch (error) {
