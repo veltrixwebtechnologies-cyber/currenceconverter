@@ -52,6 +52,7 @@ export default function App() {
   let clerkIsLoaded = true;
   let clerkIsSignedIn = false;
   let clerkGetToken: (() => Promise<string | null>) | null = null;
+  let clerkEnabled = true;
   try {
     const { user, isLoaded } = useUser();
     const { isSignedIn, getToken } = useAuth();
@@ -61,6 +62,7 @@ export default function App() {
     clerkGetToken = getToken;
   } catch (_) {
     // ClerkProvider not mounted — auth features disabled
+    clerkEnabled = false;
   }
 
   const navigate = (to: string) => {
@@ -457,7 +459,7 @@ export default function App() {
             </>
           )}
           {/* Clerk UserButton or Sign In */}
-          {clerkIsLoaded && (
+          {clerkEnabled && clerkIsLoaded && (
             clerkIsSignedIn ? (
               <div style={{ display: 'flex', alignItems: 'center' }}>
                 <UserButton afterSignOutUrl="/" />
@@ -547,6 +549,8 @@ export default function App() {
           clerkUser={clerkUser}
           clerkGetToken={clerkGetToken}
           showToast={showToast}
+          clerkEnabled={clerkEnabled}
+          setShowLicenseModal={setShowLicenseModal}
         />
       )}
 
@@ -1450,9 +1454,11 @@ interface PricingPageProps {
   clerkUser: any;
   clerkGetToken: (() => Promise<string | null>) | null;
   showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
+  clerkEnabled: boolean;
+  setShowLicenseModal: (show: boolean) => void;
 }
 
-function PricingPage({ navigate, isPro, clerkIsSignedIn, clerkIsLoaded, clerkUser, clerkGetToken, showToast }: PricingPageProps) {
+function PricingPage({ navigate, isPro, clerkIsSignedIn, clerkIsLoaded, clerkUser, clerkGetToken, showToast, clerkEnabled, setShowLicenseModal }: PricingPageProps) {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleUpgrade = async () => {
@@ -1566,6 +1572,19 @@ function PricingPage({ navigate, isPro, clerkIsSignedIn, clerkIsLoaded, clerkUse
             {isPro ? (
               <div style={{ textAlign: 'center', padding: '13px', borderRadius: '12px', background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.3)', color: 'var(--cy)', fontWeight: 700, fontSize: '15px' }}>
                 ✓ You're already a Pro member!
+              </div>
+            ) : !clerkEnabled ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <button
+                  className="pbtn pbtn-p"
+                  onClick={() => setShowLicenseModal(true)}
+                  style={{ width: '100%', padding: '14px', borderRadius: '12px', background: 'linear-gradient(135deg, var(--vi), var(--cy))', border: 'none', color: '#fff', fontWeight: 700, fontSize: '16px', cursor: 'pointer' }}
+                >
+                  🔑 Activate Pro License
+                </button>
+                <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--tx3)' }}>
+                  Clerk authentication is disabled. Activate Pro using a license key.
+                </p>
               </div>
             ) : clerkIsLoaded && !clerkIsSignedIn ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
