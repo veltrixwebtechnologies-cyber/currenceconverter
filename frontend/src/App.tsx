@@ -473,7 +473,7 @@ export default function App() {
                 <UserButton afterSignOutUrl="/" />
               </div>
             ) : (
-              <SignInButton mode="modal" forceRedirectUrl={path === '/pricing' ? '/pricing' : undefined}>
+              <SignInButton mode={window.innerWidth < 768 ? "redirect" : "modal"} forceRedirectUrl={path === '/pricing' ? '/pricing' : undefined}>
                 <button className="nav-secondary-btn" style={{ padding: '7px 14px', fontSize: '13px' }}>
                   Sign In
                 </button>
@@ -1594,7 +1594,7 @@ function PricingPage({ navigate, isPro, clerkIsSignedIn, clerkIsLoaded, clerkUse
               </div>
             ) : clerkIsLoaded && !clerkIsSignedIn ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <SignInButton mode="modal" forceRedirectUrl="/pricing">
+                <SignInButton mode={window.innerWidth < 768 ? "redirect" : "modal"} forceRedirectUrl="/pricing">
                   <button
                     className="pbtn pbtn-p"
                     style={{ width: '100%', padding: '14px', borderRadius: '12px', background: 'linear-gradient(135deg, var(--vi), var(--cy))', border: 'none', color: '#fff', fontWeight: 700, fontSize: '16px', cursor: 'pointer' }}
