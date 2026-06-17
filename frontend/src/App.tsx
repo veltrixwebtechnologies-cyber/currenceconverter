@@ -45,7 +45,7 @@ export default function App() {
   const [path, setPath] = useState<string>(window.location.pathname);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const currentView = path === '/' ? 'landing' : (path === '/customizer' ? 'customizer' : (path === '/dev-dashboard' ? 'dev-dashboard' : 'other'));
+  const currentView = path === '/' ? 'landing' : (path === '/dev-dashboard' ? 'dev-dashboard' : 'other');
 
   // Clerk hooks (safely handle when ClerkProvider is not present)
   let clerkUser: any = null;
@@ -100,8 +100,6 @@ export default function App() {
 
   // Rates Cache
   const [rates, setRates] = useState<Record<string, number>>({});
-  const [ratesLastUpdated, setRatesLastUpdated] = useState<string>('');
-
   // UI state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info'; visible: boolean }>({
     message: '',
@@ -253,7 +251,6 @@ export default function App() {
       const data = await response.json() as { success: boolean; rates: Record<string, number>; updatedAt: string };
       if (data.success) {
         setRates(data.rates);
-        setRatesLastUpdated(new Date(data.updatedAt).toLocaleTimeString());
       }
     } catch (error) {
       console.error('Error fetching rates:', error);
@@ -281,23 +278,6 @@ export default function App() {
     }
   };
 
-  const saveSettings = async (updatedSettings: UserSettings) => {
-    setSettings(updatedSettings);
-    try {
-      const response = await fetch(`${API_BASE}/settings/${userId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedSettings)
-      });
-      const data = await response.json() as { success: boolean };
-      if (data.success) {
-        showToast('Settings saved and synced to cloud!', 'success');
-      }
-    } catch (error) {
-      console.error('Error saving settings:', error);
-      showToast('Settings saved locally (offline)', 'info');
-    }
-  };
 
   const handleActivateLicense = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -400,11 +380,6 @@ export default function App() {
               </a>
             </li>
             <li>
-              <a onClick={() => navigate('/customizer')} className={path === '/customizer' ? 'active' : ''}>
-                Extension Simulator
-              </a>
-            </li>
-            <li>
               <a onClick={() => navigate('/currency-converter')} className={path === '/currency-converter' ? 'active' : ''}>
                 Currency Converter
               </a>
@@ -427,9 +402,6 @@ export default function App() {
         <div className="nav-actions">
           {path === '/' ? (
             <>
-              <button onClick={() => navigate('/customizer')} className="nav-secondary-btn">
-                🛠 Open Simulator
-              </button>
               {clerkIsSignedIn ? (
                 isPro ? (
                   <button onClick={() => navigate('/dev-dashboard')} className="nav-cta">
@@ -492,7 +464,6 @@ export default function App() {
               <li><a href="#faq" onClick={() => setMobileMenuOpen(false)}>FAQ</a></li>
               <li><a onClick={() => { navigate('/currency-converter'); setMobileMenuOpen(false); }}>🧮 Currency Converter</a></li>
               <li><a onClick={() => { navigate('/live-exchange-rates'); setMobileMenuOpen(false); }}>📈 Live Exchange Rates</a></li>
-              <li><a onClick={() => { navigate('/customizer'); setMobileMenuOpen(false); }}>🛠 Simulate Extension</a></li>
               {isPro ? (
                 <li><a onClick={() => { navigate('/dev-dashboard'); setMobileMenuOpen(false); }}>📊 Pro Dashboard</a></li>
               ) : (
@@ -502,7 +473,6 @@ export default function App() {
           ) : (
             <>
               <li><a onClick={() => { navigate('/'); setMobileMenuOpen(false); }}>Home</a></li>
-              <li><a onClick={() => { navigate('/customizer'); setMobileMenuOpen(false); }}>Extension Simulator</a></li>
               <li><a onClick={() => { navigate('/currency-converter'); setMobileMenuOpen(false); }}>Currency Converter</a></li>
               <li><a onClick={() => { navigate('/live-exchange-rates'); setMobileMenuOpen(false); }}>Live Exchange Rates</a></li>
               {isPro && <li><a onClick={() => { navigate('/dev-dashboard'); setMobileMenuOpen(false); }}>Developer Dashboard</a></li>}
@@ -520,16 +490,6 @@ export default function App() {
         />
       )}
 
-      {path === '/customizer' && (
-        <CustomizerWorkspace
-          settings={settings}
-          saveSettings={saveSettings}
-          isPro={isPro}
-          rates={rates}
-          setShowLicenseModal={setShowLicenseModal}
-          ratesLastUpdated={ratesLastUpdated}
-        />
-      )}
 
       {path === '/dev-dashboard' && (
         <DeveloperDashboard
@@ -593,7 +553,6 @@ export default function App() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
               <a onClick={() => navigate('/currency-converter')} style={{ color: 'var(--tx2)', cursor: 'pointer' }}>Currency Converter</a>
               <a onClick={() => navigate('/live-exchange-rates')} style={{ color: 'var(--tx2)', cursor: 'pointer' }}>Live Exchange Rates</a>
-              <a onClick={() => navigate('/customizer')} style={{ color: 'var(--tx2)', cursor: 'pointer' }}>Extension Simulator</a>
             </div>
           </div>
           <div style={{ textAlign: 'left' }}>
@@ -631,7 +590,7 @@ export default function App() {
         <div className="modal-content" onClick={(e) => e.stopPropagation()}>
           <button className="modal-close" onClick={() => setShowLicenseModal(false)}>×</button>
           <h3 className="modal-title">Unlock HoverConvert Pro</h3>
-          <p className="modal-subtitle">Enter your Pro license key to unlock all currencies, dark mode visual customizer, and cloud synchronization.</p>
+          <p className="modal-subtitle">Enter your Pro license key to unlock all currencies and cloud synchronization.</p>
 
           <form onSubmit={handleActivateLicense} className="modal-form" style={{ marginBottom: '20px' }}>
             <div className="control-group">
@@ -1296,12 +1255,12 @@ function LandingPage({ visibleElements, navigate }: LandingProps) {
               <li>Top 12 currencies</li>
               <li>Hover tooltips</li>
               <li>Works on all websites</li>
-              <li className="no">Dark mode customizer</li>
+              <li className="no">Manual rate override</li>
               <li className="no">Unlimited conversions</li>
               <li className="no">Favorite currencies</li>
             </ul>
-            <button onClick={() => { trackEvent('cta_pricing_explore', { plan: 'free' }); navigate('/customizer'); }} className="pbtn pbtn-f">
-              Simulate Free Plan
+            <button onClick={() => { trackEvent('cta_pricing_explore', { plan: 'free' }); navigate('/currency-converter'); }} className="pbtn pbtn-f">
+              Use Free Calculator
             </button>
           </div>
           <div className={`pcard hot reveal-init d1 ${isVisible('p-pro') ? 'reveal-visible' : ''}`} data-reveal-id="p-pro">
@@ -1538,10 +1497,10 @@ function PricingPage({ navigate, isPro, clerkIsSignedIn, clerkIsLoaded, clerkUse
             </ul>
             <button
               className="pbtn pbtn-f"
-              onClick={() => navigate('/customizer')}
+              onClick={() => navigate('/currency-converter')}
               style={{ width: '100%', padding: '13px', borderRadius: '12px', background: 'transparent', border: '1px solid var(--br)', color: 'var(--tx2)', cursor: 'pointer', fontWeight: 600, fontSize: '15px' }}
             >
-              Try Free Simulator
+              Use Free Calculator
             </button>
           </div>
 
@@ -1727,10 +1686,10 @@ function PaymentSuccessPage({ navigate }: { navigate: (to: string) => void }) {
             ⚡ Go to Home Page
           </button>
           <button
-            onClick={() => navigate('/customizer')}
+            onClick={() => navigate('/dev-dashboard')}
             style={{ padding: '12px 32px', fontSize: '14px', borderRadius: '12px', width: '100%', background: 'transparent', border: '1px solid var(--br)', color: 'var(--tx2)', cursor: 'pointer' }}
           >
-            🛠 Open Extension Simulator
+            📊 Open Developer Dashboard
           </button>
         </div>
 
@@ -1783,414 +1742,6 @@ function FAQSection() {
         ))}
       </div>
     </section>
-  );
-}
-
-/* ═══════════════════════════════════════════════════
-   CUSTOMIZER / WORKSPACE COMPONENT
-   ═══════════════════════════════════════════════════ */
-interface CustomizerProps {
-  settings: UserSettings;
-  saveSettings: (settings: UserSettings) => void;
-  isPro: boolean;
-  rates: Record<string, number>;
-  setShowLicenseModal: (show: boolean) => void;
-  ratesLastUpdated: string;
-}
-
-function CustomizerWorkspace({ settings, saveSettings, isPro, rates, setShowLicenseModal, ratesLastUpdated }: CustomizerProps) {
-  const [nativeCurrency, setNativeCurrency] = useState(settings.nativeCurrency);
-  const [theme, setTheme] = useState(settings.theme);
-  const [hoverDelay, setHoverDelay] = useState(settings.hoverDelay);
-  const [rateOverride, setRateOverride] = useState<number | null>(settings.rateOverride);
-  const [favoriteCurrencies, setFavoriteCurrencies] = useState<string[]>(settings.favoriteCurrencies);
-
-  // Simulator site currency
-  const [simSiteCurrency, setSimSiteCurrency] = useState<'USD' | 'EUR' | 'GBP' | 'JPY' | 'AUD'>('USD');
-
-  // Simulator interaction state
-  const [hoveredPrice, setHoveredPrice] = useState<{
-    id: string;
-    value: number;
-    currency: string;
-    rect: DOMRect;
-  } | null>(null);
-
-  const [activeDelayTimer, setActiveDelayTimer] = useState<number | null>(null);
-
-  // Sync state with parent when loaded
-  useEffect(() => {
-    setNativeCurrency(settings.nativeCurrency);
-    setTheme(settings.theme);
-    setHoverDelay(settings.hoverDelay);
-    setRateOverride(settings.rateOverride);
-    setFavoriteCurrencies(settings.favoriteCurrencies);
-  }, [settings]);
-
-  const handleApplyChanges = () => {
-    saveSettings({
-      userId: settings.userId,
-      nativeCurrency,
-      theme,
-      hoverDelay,
-      rateOverride,
-      favoriteCurrencies
-    });
-  };
-
-  const handleToggleFavorite = (curr: string) => {
-    if (favoriteCurrencies.includes(curr)) {
-      if (favoriteCurrencies.length <= 1) return; // Keep at least 1
-      setFavoriteCurrencies(favoriteCurrencies.filter((c) => c !== curr));
-    } else {
-      // Pro check for unlimited favorites
-      if (!isPro && favoriteCurrencies.length >= 3) {
-        showProNotice('Basic plan is limited to 3 favorite currencies. Unlock Pro for unlimited!');
-        return;
-      }
-      setFavoriteCurrencies([...favoriteCurrencies, curr]);
-    }
-  };
-
-  const showProNotice = (msg: string) => {
-    alert(msg);
-    setShowLicenseModal(true);
-  };
-
-  const handlePriceMouseEnter = (id: string, value: number, currency: string, e: React.MouseEvent<HTMLSpanElement>) => {
-    if (activeDelayTimer) {
-      window.clearTimeout(activeDelayTimer);
-    }
-
-    const rect = e.currentTarget.getBoundingClientRect();
-    const container = e.currentTarget.closest('.sim-content');
-    if (!container) return;
-    const containerRect = container.getBoundingClientRect();
-
-    // calculate local coordinates inside container
-    const relativeRect = {
-      ...rect,
-      left: rect.left - containerRect.left,
-      top: rect.top - containerRect.top,
-    } as DOMRect;
-
-    const timer = window.setTimeout(() => {
-      setHoveredPrice({
-        id,
-        value,
-        currency,
-        rect: relativeRect
-      });
-    }, hoverDelay);
-
-    setActiveDelayTimer(timer);
-  };
-
-  const handlePriceMouseLeave = () => {
-    if (activeDelayTimer) {
-      window.clearTimeout(activeDelayTimer);
-      setActiveDelayTimer(null);
-    }
-    setHoveredPrice(null);
-  };
-
-  // Convert price logic
-  const getConvertedPrice = (val: number, from: string) => {
-    const rateFrom = rates[from] || 1;
-    const rateTo = rates[nativeCurrency] || 1;
-
-    // Converted = value * (rateTo / rateFrom)
-    let conversionRate = rateTo / rateFrom;
-
-    if (rateOverride !== null && from === 'USD' && nativeCurrency === 'INR') {
-      conversionRate = rateOverride;
-    }
-
-    const converted = val * conversionRate;
-
-    // Formatting currency symbols
-    const formatSymbols: Record<string, string> = {
-      INR: '₹',
-      USD: '$',
-      EUR: '€',
-      GBP: '£',
-      JPY: '¥',
-      AUD: 'A$'
-    };
-
-    const sym = formatSymbols[nativeCurrency] || nativeCurrency + ' ';
-    return `${sym}${converted.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  };
-
-  const getExchangeRateText = (from: string) => {
-    const rateFrom = rates[from] || 1;
-    const rateTo = rates[nativeCurrency] || 1;
-    let conversionRate = rateTo / rateFrom;
-
-    if (rateOverride !== null && from === 'USD' && nativeCurrency === 'INR') {
-      conversionRate = rateOverride;
-    }
-
-    return `1 ${from} = ${nativeCurrency} ${conversionRate.toFixed(2)}`;
-  };
-
-  const mockProducts = [
-    { id: 'p1', title: 'Acoustic Guitar Bundle', rate: 4.8, reviews: 312, icon: '🎸', basePrices: { USD: 180, EUR: 165, GBP: 140, JPY: 28000, AUD: 270 } },
-    { id: 'p2', title: 'Vintage Leather Satchel', rate: 4.6, reviews: 94, icon: '💼', basePrices: { USD: 85, EUR: 78, GBP: 66, JPY: 13000, AUD: 125 } },
-    { id: 'p3', title: 'Studio Condenser Mic', rate: 4.9, reviews: 1045, icon: '🎙️', basePrices: { USD: 220, EUR: 200, GBP: 175, JPY: 34000, AUD: 330 } },
-    { id: 'p4', title: 'Retro Mechanical Keyboard', rate: 4.7, reviews: 421, icon: '⌨️', basePrices: { USD: 110, EUR: 100, GBP: 88, JPY: 17000, AUD: 165 } }
-  ];
-
-
-
-  const currencySymbols: Record<string, string> = {
-    USD: '$',
-    EUR: '€',
-    GBP: '£',
-    JPY: '¥',
-    AUD: 'A$',
-    INR: '₹'
-  };
-
-  return (
-    <div className="dashboard-layout">
-      {/* SIDEBAR SETTINGS CONTROL PANEL */}
-      <div className="sidebar">
-        <div>
-          <h3 className="section-title">Extension Customizer</h3>
-          <p style={{ fontSize: '12px', color: 'var(--tx2)', marginBottom: '20px' }}>
-            Modify how the extension functions. Changes will reflect in the live simulator on the right.
-          </p>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-            {/* Native Currency */}
-            <div className="control-group">
-              <label className="control-label">Convert to (Native Currency)</label>
-              <select
-                className="select-input"
-                value={nativeCurrency}
-                onChange={(e) => setNativeCurrency(e.target.value)}
-              >
-                <option value="INR">₹ INR - Indian Rupee</option>
-                <option value="USD">$ USD - US Dollar</option>
-                <option value="EUR">€ EUR - Euro</option>
-                <option value="GBP">£ GBP - British Pound</option>
-                <option value="JPY">¥ JPY - Japanese Yen</option>
-                <option value="AUD">A$ AUD - Australian Dollar</option>
-              </select>
-            </div>
-
-            {/* Hover Delay */}
-            <div className="control-group">
-              <label className="control-label">
-                Hover Delay
-                <span className="value">{hoverDelay}ms</span>
-              </label>
-              <input
-                type="range"
-                className="range-input"
-                min={50}
-                max={1000}
-                step={50}
-                value={hoverDelay}
-                onChange={(e) => setHoverDelay(Number(e.target.value))}
-              />
-              <span style={{ fontSize: '10px', color: 'var(--tx3)', marginTop: '-4px' }}>
-                How long your cursor must rest on a price before the tooltip shows.
-              </span>
-            </div>
-
-            {/* Visual Theme */}
-            <div className="control-group">
-              <label className="control-label">Tooltip UI Theme</label>
-              <select
-                className="select-input"
-                value={theme}
-                onChange={(e) => {
-                  if (!isPro && e.target.value !== 'light') {
-                    showProNotice('Dark and Glass themes are Pro features! Activate Pro to unlock.');
-                    return;
-                  }
-                  setTheme(e.target.value as any);
-                }}
-              >
-                <option value="light">Light Mode Theme</option>
-                <option value="dark">Dark Mode Theme (PRO)</option>
-                <option value="glass">Glassmorphic Glow (PRO)</option>
-              </select>
-            </div>
-
-            {/* Rate Overrides */}
-            <div className="control-group">
-              <div
-                className="toggle-container"
-                onClick={() => {
-                  if (!isPro) {
-                    showProNotice('Custom rate override is a Pro feature! Activate Pro to unlock.');
-                    return;
-                  }
-                  if (rateOverride !== null) {
-                    setRateOverride(null);
-                  } else {
-                    setRateOverride(88.5); // Default override
-                  }
-                }}
-              >
-                <div className="toggle-info">
-                  <div className="toggle-title">Rate Override</div>
-                  <div className="toggle-desc">Define a custom rate manually</div>
-                </div>
-                <div className={`toggle-switch ${rateOverride !== null ? 'on' : ''}`}></div>
-              </div>
-
-              {rateOverride !== null && (
-                <div style={{ marginTop: '8px' }}>
-                  <label className="control-label">1 USD = INR</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    className="text-input"
-                    value={rateOverride}
-                    onChange={(e) => setRateOverride(Number(e.target.value))}
-                    style={{ marginTop: '4px' }}
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Favorite Currencies */}
-            <div className="control-group">
-              <label className="control-label">Fav Currencies (Quick-toggle list)</label>
-              <div className="currencies-grid">
-                {['USD', 'EUR', 'GBP', 'JPY', 'AUD', 'INR'].map((curr) => (
-                  <div
-                    key={curr}
-                    className={`currency-badge ${favoriteCurrencies.includes(curr) ? 'selected' : ''}`}
-                    onClick={() => handleToggleFavorite(curr)}
-                  >
-                    {curr}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="action-block">
-          <button onClick={handleApplyChanges} className="primary-btn">
-            💾 Apply & Sync Settings
-          </button>
-          {!isPro && (
-            <button onClick={() => setShowLicenseModal(true)} className="secondary-btn" style={{ borderColor: 'var(--vi)', color: 'var(--vi2)' }}>
-              🔑 Unlock Pro features
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* LIVE SIMULATOR PANE */}
-      <div className="simulator-pane">
-        <div className="sim-header">
-          <div className="sim-title-group">
-            <h2>Interactive Simulator</h2>
-            <p>Hover over prices in the browser window below to see your extension settings live in action.</p>
-          </div>
-          <div className="sim-badge">
-            <div className="sim-badge-dot"></div>
-            Simulator Active
-          </div>
-        </div>
-
-        <div className="sim-frame">
-          <div className="sim-chrome">
-            <div className="dots">
-              <div className="dot dot-r"></div>
-              <div className="dot dot-y"></div>
-              <div className="dot dot-g"></div>
-            </div>
-            <div className="sim-url-bar">
-              <span className="sim-url-lock">🔒</span>
-              https://gearboxshopping.com/search?q=retro-studio
-            </div>
-          </div>
-
-          <div className="sim-content">
-            <div className="sim-page-header">
-              <span>Search Results — 4 instruments found</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '11px', color: 'var(--tx3)' }}>Display prices in:</span>
-                <select
-                  value={simSiteCurrency}
-                  onChange={(e) => setSimSiteCurrency(e.target.value as any)}
-                >
-                  <option value="USD">🇺🇸 USD ($)</option>
-                  <option value="EUR">🇪🇺 EUR (€)</option>
-                  <option value="GBP">🇬🇧 GBP (£)</option>
-                  <option value="JPY">🇯🇵 JPY (¥)</option>
-                  <option value="AUD">🇦🇺 AUD (A$)</option>
-                </select>
-              </div>
-            </div>
-
-            {/* PRODUCTS GRID */}
-            <div className="sim-products-grid">
-              {mockProducts.map((p) => {
-                const price = p.basePrices[simSiteCurrency];
-                return (
-                  <div key={p.id} className="sim-product-card">
-                    <div className="sim-prod-thumbnail">{p.icon}</div>
-                    <div className="sim-prod-title">{p.title}</div>
-                    <div className="sim-prod-rating">
-                      {'★'.repeat(Math.floor(p.rate))}
-                      {'☆'.repeat(5 - Math.floor(p.rate))}
-                      <span>({p.reviews})</span>
-                    </div>
-                    <div className="sim-prod-footer">
-                      <span
-                        className={`sim-price ${hoveredPrice?.id === p.id ? 'selected-hover' : ''}`}
-                        onMouseEnter={(e) => handlePriceMouseEnter(p.id, price, simSiteCurrency, e)}
-                        onMouseLeave={handlePriceMouseLeave}
-                      >
-                        {currencySymbols[simSiteCurrency]}{price.toLocaleString()}
-                      </span>
-                      <button className="sim-buy-btn">Add</button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* EXTENSION RENDERED TOOLTIP */}
-            {hoveredPrice && (
-              <div
-                className={`sim-tooltip theme-${theme}`}
-                style={{
-                  left: `${hoveredPrice.rect.left - 20}px`,
-                  top: `${hoveredPrice.rect.top - 95}px`,
-                  opacity: 1
-                }}
-              >
-                <div className="tt-label">Converted to {nativeCurrency}</div>
-                <div className="tt-val">{getConvertedPrice(hoveredPrice.value, hoveredPrice.currency)}</div>
-                <div className="tt-orig">
-                  {currencySymbols[hoveredPrice.currency]}
-                  {hoveredPrice.value.toLocaleString()} {hoveredPrice.currency}
-                </div>
-                <div className="tt-rate">
-                  <div className="tt-live"></div>
-                  {getExchangeRateText(hoveredPrice.currency)}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px', color: 'var(--tx3)' }}>
-          <span>Rates fetched via secure API Proxy.</span>
-          <span>Last sync: {ratesLastUpdated || 'just now'} (UTC)</span>
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -2519,7 +2070,7 @@ function USDToINRPage({ navigate, rates }: PageProps) {
               <p style={{ fontSize: '12px', color: 'var(--tx2)', marginBottom: '14px' }}>
                 Want to convert currencies automatically while you browse without clicking? Try the HoverConvert Chrome extension.
               </p>
-              <button onClick={() => navigate('/customizer')} className="nav-cta" style={{ width: '100%', padding: '10px' }}>
+              <button onClick={() => navigate('/')} className="nav-cta" style={{ width: '100%', padding: '10px' }}>
                 ⚡ Try Extension
               </button>
             </div>
@@ -2686,7 +2237,7 @@ function EURToINRPage({ navigate, rates }: PageProps) {
               <p style={{ fontSize: '12px', color: 'var(--tx2)', marginBottom: '14px' }}>
                 Want to convert currencies automatically while you browse without clicking? Try the HoverConvert Chrome extension.
               </p>
-              <button onClick={() => navigate('/customizer')} className="nav-cta" style={{ width: '100%', padding: '10px' }}>
+              <button onClick={() => navigate('/')} className="nav-cta" style={{ width: '100%', padding: '10px' }}>
                 ⚡ Try Extension
               </button>
             </div>
@@ -2853,7 +2404,7 @@ function GBPToINRPage({ navigate, rates }: PageProps) {
               <p style={{ fontSize: '12px', color: 'var(--tx2)', marginBottom: '14px' }}>
                 Want to convert currencies automatically while you browse without clicking? Try the HoverConvert Chrome extension.
               </p>
-              <button onClick={() => navigate('/customizer')} className="nav-cta" style={{ width: '100%', padding: '10px' }}>
+              <button onClick={() => navigate('/')} className="nav-cta" style={{ width: '100%', padding: '10px' }}>
                 ⚡ Try Extension
               </button>
             </div>
@@ -3070,7 +2621,7 @@ function LiveExchangeRatesPage({ navigate, rates }: PageProps) {
           <p style={{ fontSize: '14px', color: 'var(--tx2)', maxWidth: '500px' }}>
             Install the free HoverConvert Chrome extension to convert all foreign price lists and checkout items automatically while browsing.
           </p>
-          <button onClick={() => navigate('/customizer')} className="nav-cta" style={{ padding: '12px 24px' }}>
+          <button onClick={() => navigate('/')} className="nav-cta" style={{ padding: '12px 24px' }}>
             ⚡ Get HoverConvert Now
           </button>
         </div>
