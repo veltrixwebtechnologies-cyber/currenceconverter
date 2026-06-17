@@ -28,10 +28,22 @@ export interface Feedback {
   createdAt: string;
 }
 
+// NEW: Clerk + Dodo based subscription
+export interface UserSubscription {
+  clerkUserId: string;
+  email: string;
+  premium: boolean;
+  plan: 'free' | 'pro_lifetime';
+  dodoPaymentId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface DBData {
   settings: Record<string, UserSettings>;
   licenses: Record<string, License>;
   feedback: Feedback[];
+  subscriptions: Record<string, UserSubscription>;
 }
 
 const DEFAULT_SETTINGS = (userId: string): UserSettings => ({
@@ -43,11 +55,11 @@ const DEFAULT_SETTINGS = (userId: string): UserSettings => ({
   favoriteCurrencies: ['USD', 'EUR', 'GBP', 'JPY', 'AUD']
 });
 
-// Prepopulate database with some license keys for testing/demo
 const initialData: DBData = {
   settings: {},
   licenses: {},
-  feedback: []
+  feedback: [],
+  subscriptions: {}
 };
 
 // Local File Helpers
@@ -58,7 +70,10 @@ function readDB(): DBData {
       return initialData;
     }
     const content = fs.readFileSync(DATA_FILE, 'utf-8');
-    return JSON.parse(content);
+    const parsed = JSON.parse(content);
+    // Ensure subscriptions key exists in older data files
+    if (!parsed.subscriptions) parsed.subscriptions = {};
+    return parsed;
   } catch (error) {
     console.error('Error reading database file, using fallback initial data', error);
     return initialData;
@@ -73,15 +88,11 @@ function writeDB(data: DBData): void {
   }
 }
 
-// Vercel KV Initializer (Prepopulate demo keys if not present)
+// Vercel KV Initializer
 async function ensureKVPooled(): Promise<void> {
   try {
     const initialized = await kv.get<boolean>('hc:initialized');
     if (!initialized) {
-      // Set the demo licenses in KV
-      for (const [key, license] of Object.entries(initialData.licenses)) {
-        await kv.hset('hc:licenses', { [key]: license });
-      }
       await kv.set('hc:initialized', true);
     }
   } catch (error) {
@@ -207,5 +218,67 @@ export const db = {
       writeDB(data);
       return newFeedback;
     }
+  },
+
+  // ── Subscription methods (Clerk + Dodo) ──────────────────────────────────
+
+  getSubscription: async (clerkUserId: string): Promise<UserSubscription | null> => {
+    if (isVercel) {
+      try {
+        const sub = await kv.hget<UserSubscription>('hc:subscriptions', clerkUserId);
+        return sub || null;
+      } catch (error) {
+        console.error('KV getSubscription error', error);
+        return null;
+      }
+    } else {
+      const data = readDB();
+      return data.subscriptions[clerkUserId] || null;
+    }
+  },
+
+  upsertSubscription: async (
+    clerkUserId: string,
+    email: string,
+    plan: 'free' | 'pro_lifetime',
+    dodoPaymentId: string | null
+  ): Promise<UserSubscription> => {
+    const now = new Date().toISOString();
+    const isPremium = plan === 'pro_lifetime';
+
+    let existing: UserSubscription | null = null;
+    if (isVercel) {
+      try {
+        existing = await kv.hget<UserSubscription>('hc:subscriptions', clerkUserId);
+      } catch (_) {}
+    } else {
+      const data = readDB();
+      existing = data.subscriptions[clerkUserId] || null;
+    }
+
+    const subscription: UserSubscription = {
+      clerkUserId,
+      email,
+      premium: isPremium,
+      plan,
+      dodoPaymentId: dodoPaymentId || existing?.dodoPaymentId || null,
+      createdAt: existing?.createdAt || now,
+      updatedAt: now
+    };
+
+    if (isVercel) {
+      try {
+        await kv.hset('hc:subscriptions', { [clerkUserId]: subscription });
+      } catch (error) {
+        console.error('KV upsertSubscription error', error);
+        throw error;
+      }
+    } else {
+      const data = readDB();
+      data.subscriptions[clerkUserId] = subscription;
+      writeDB(data);
+    }
+
+    return subscription;
   }
 };

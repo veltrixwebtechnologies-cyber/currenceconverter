@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { createClerkClient, verifyToken } from '@clerk/backend';
+import { Webhook } from 'svix';
 import { db } from './db';
 
 dotenv.config();
@@ -8,100 +10,92 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5001;
 
-// Fallback rates if external API is down
+// Clerk client (server-side)
+const clerk = createClerkClient({
+  secretKey: process.env.CLERK_SECRET_KEY || ''
+});
+
+// ── Exchange Rates Cache ──────────────────────────────────────────────────────
+
 const FALLBACK_RATES: Record<string, number> = {
-  USD: 1.0,
-  INR: 85.02,
-  EUR: 0.92,
-  GBP: 0.78,
-  JPY: 156.40,
-  AUD: 1.51,
-  CAD: 1.37,
-  CHF: 0.90,
-  CNY: 7.24,
-  SGD: 1.35,
-  HKD: 7.81,
-  AED: 3.67,
-  SAR: 3.75,
-  MYR: 4.71,
-  THB: 36.65,
-  NZD: 1.63
+  USD: 1.0, INR: 85.02, EUR: 0.92, GBP: 0.78, JPY: 156.40,
+  AUD: 1.51, CAD: 1.37, CHF: 0.90, CNY: 7.24, SGD: 1.35,
+  HKD: 7.81, AED: 3.67, SAR: 3.75, MYR: 4.71, THB: 36.65, NZD: 1.63
 };
 
-interface RatesCache {
-  rates: Record<string, number>;
-  timestamp: number;
-}
-
-let ratesCache: RatesCache = {
-  rates: FALLBACK_RATES,
-  timestamp: 0
-};
-
+interface RatesCache { rates: Record<string, number>; timestamp: number; }
+let ratesCache: RatesCache = { rates: FALLBACK_RATES, timestamp: 0 };
 const CACHE_DURATION = 6 * 60 * 60 * 1000; // 6 hours
 
-// Helper to fetch live rates
 async function getLiveRates(): Promise<Record<string, number>> {
   const now = Date.now();
-  if (now - ratesCache.timestamp < CACHE_DURATION) {
-    return ratesCache.rates;
-  }
-
+  if (now - ratesCache.timestamp < CACHE_DURATION) return ratesCache.rates;
   try {
     console.log('Fetching live exchange rates...');
     const response = await fetch('https://open.er-api.com/v6/latest/USD');
-    if (!response.ok) {
-      throw new Error(`API returned status ${response.status}`);
-    }
+    if (!response.ok) throw new Error(`API returned status ${response.status}`);
     const data = await response.json() as any;
     if (data && data.rates) {
-      ratesCache = {
-        rates: data.rates,
-        timestamp: now
-      };
+      ratesCache = { rates: data.rates, timestamp: now };
       console.log('Live exchange rates updated successfully.');
       return data.rates;
     }
     throw new Error('Invalid response format');
   } catch (error) {
     console.error('Failed to fetch live exchange rates, using cache/fallback:', error);
-    // If cache has ever been updated, keep it, otherwise use fallback
-    if (ratesCache.timestamp === 0) {
-      ratesCache.timestamp = now; // Prevent constant API calls on failure
-    }
+    if (ratesCache.timestamp === 0) ratesCache.timestamp = now;
     return ratesCache.rates;
   }
 }
 
-app.use(cors());
+// ── Middleware ────────────────────────────────────────────────────────────────
+
+app.use(cors({
+  origin: true,
+  credentials: true
+}));
+
+// NOTE: Raw body middleware for webhook signature verification MUST come first
+// We use express.raw() for the webhook route, then express.json() for everything else
+app.use('/api/webhooks/dodo', express.raw({ type: 'application/json' }));
 app.use(express.json());
 
-// Log requests
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
   next();
 });
 
-// Rates endpoint
+// ── Helper: Verify Clerk token ────────────────────────────────────────────────
+
+async function getClerkUserId(req: express.Request): Promise<string | null> {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+  const token = authHeader.slice(7);
+  try {
+    // Verify the session token with Clerk
+    const sessionClaims = await verifyToken(token, {
+      secretKey: process.env.CLERK_SECRET_KEY
+    });
+    return sessionClaims.sub || null;
+  } catch (error) {
+    console.error('Clerk token verification failed:', error);
+    return null;
+  }
+}
+
+// ── Rates endpoint ────────────────────────────────────────────────────────────
+
 app.get('/api/rates', async (req, res) => {
   try {
     const rates = await getLiveRates();
-    res.json({
-      success: true,
-      rates,
-      base: 'USD',
-      updatedAt: new Date(ratesCache.timestamp).toISOString()
-    });
+    res.json({ success: true, rates, base: 'USD', updatedAt: new Date(ratesCache.timestamp).toISOString() });
   } catch (error: any) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to retrieve exchange rates',
-      error: error.message
-    });
+    res.status(500).json({ success: false, message: 'Failed to retrieve exchange rates', error: error.message });
   }
 });
 
-// Settings endpoints
+// ── Settings endpoints ────────────────────────────────────────────────────────
+
 app.get('/api/settings/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
@@ -123,7 +117,8 @@ app.post('/api/settings/:userId', async (req, res) => {
   }
 });
 
-// License validation & activation
+// ── License validation & activation (legacy) ─────────────────────────────────
+
 app.post('/api/license/activate', async (req, res) => {
   try {
     const { email } = req.body;
@@ -131,11 +126,7 @@ app.post('/api/license/activate', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid email address' });
     }
     const license = await db.createLicense(email);
-    res.json({
-      success: true,
-      message: 'License activated successfully',
-      license
-    });
+    res.json({ success: true, message: 'License activated successfully', license });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -149,24 +140,17 @@ app.post('/api/license/validate', async (req, res) => {
     }
     const license = await db.validateLicense(licenseKey);
     if (license) {
-      res.json({
-        success: true,
-        valid: true,
-        license
-      });
+      res.json({ success: true, valid: true, license });
     } else {
-      res.json({
-        success: true,
-        valid: false,
-        message: 'Invalid or expired license key'
-      });
+      res.json({ success: true, valid: false, message: 'Invalid or expired license key' });
     }
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
-// Feedback endpoint
+// ── Feedback endpoint ─────────────────────────────────────────────────────────
+
 app.post('/api/feedback', async (req, res) => {
   try {
     const { email, message } = req.body;
@@ -174,22 +158,227 @@ app.post('/api/feedback', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email and message are required' });
     }
     const feedback = await db.addFeedback(email, message);
-    res.json({
-      success: true,
-      message: 'Thank you for your feedback! We will get back to you shortly.',
-      feedback
-    });
+    res.json({ success: true, message: 'Thank you for your feedback! We will get back to you shortly.', feedback });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
-// Health check endpoint
+// ── NEW: Check Premium Status ─────────────────────────────────────────────────
+// GET /api/check-premium
+// Accepts: Authorization: Bearer <clerk-session-token>
+//       OR: ?userId=<clerkUserId> (for extension quick-check)
+
+app.get('/api/check-premium', async (req, res) => {
+  try {
+    // Try to get userId from auth token first (most secure)
+    let clerkUserId: string | null = await getClerkUserId(req);
+
+    // Fallback: allow direct userId query param (less secure, for extension fallback)
+    if (!clerkUserId && req.query.userId) {
+      clerkUserId = req.query.userId as string;
+    }
+
+    if (!clerkUserId) {
+      // Not logged in — free tier
+      return res.json({
+        premium: false,
+        plan: 'free',
+        dailyLimit: 50
+      });
+    }
+
+    const subscription = await db.getSubscription(clerkUserId);
+
+    if (subscription && subscription.premium) {
+      return res.json({
+        premium: true,
+        plan: subscription.plan,
+        dailyLimit: null
+      });
+    }
+
+    return res.json({
+      premium: false,
+      plan: 'free',
+      dailyLimit: 50
+    });
+  } catch (error: any) {
+    console.error('check-premium error:', error);
+    // On error, default to free tier (fail open) to avoid blocking free users
+    res.json({ premium: false, plan: 'free', dailyLimit: 50 });
+  }
+});
+
+// ── NEW: Dodo Payments Webhook ────────────────────────────────────────────────
+// POST /api/webhooks/dodo
+// Verifies Svix signature, reads Clerk userId from metadata, marks user as premium
+
+app.post('/api/webhooks/dodo', async (req, res) => {
+  const DODO_WEBHOOK_SECRET = process.env.DODO_WEBHOOK_SECRET;
+
+  if (!DODO_WEBHOOK_SECRET) {
+    console.error('DODO_WEBHOOK_SECRET not set');
+    return res.status(500).json({ error: 'Webhook secret not configured' });
+  }
+
+  // Svix signature verification
+  const svixId = req.headers['svix-id'] as string;
+  const svixTimestamp = req.headers['svix-timestamp'] as string;
+  const svixSignature = req.headers['svix-signature'] as string;
+
+  if (!svixId || !svixTimestamp || !svixSignature) {
+    return res.status(400).json({ error: 'Missing Svix headers' });
+  }
+
+  let payload: any;
+  try {
+    const wh = new Webhook(DODO_WEBHOOK_SECRET);
+    payload = wh.verify(req.body, {
+      'svix-id': svixId,
+      'svix-timestamp': svixTimestamp,
+      'svix-signature': svixSignature
+    });
+  } catch (err) {
+    console.error('Webhook signature verification failed:', err);
+    return res.status(401).json({ error: 'Invalid webhook signature' });
+  }
+
+  const eventType: string = payload.type || payload.event_type || '';
+  console.log(`Dodo webhook received: ${eventType}`);
+
+  // Handle successful payment events
+  const isSuccessEvent = [
+    'payment.succeeded',
+    'payment.completed',
+    'subscription.activated',
+    'order.paid'
+  ].includes(eventType);
+
+  if (isSuccessEvent) {
+    try {
+      // Extract metadata from the Dodo payload
+      // Dodo typically nests customer data and metadata differently
+      const metadata = payload.data?.metadata || payload.metadata || {};
+      const customer = payload.data?.customer || payload.customer || {};
+
+      const clerkUserId: string | undefined = metadata.clerkUserId || metadata.clerk_user_id;
+      const email: string | undefined =
+        metadata.email ||
+        customer.email ||
+        payload.data?.payment_link?.customer?.email;
+
+      const paymentId: string =
+        payload.data?.payment_id ||
+        payload.data?.id ||
+        payload.id ||
+        'unknown';
+
+      if (!clerkUserId) {
+        console.error('Webhook: clerkUserId missing from metadata', JSON.stringify(payload, null, 2));
+        // Acknowledge receipt even if we can't process — prevents Dodo from retrying
+        return res.status(200).json({ received: true, warning: 'clerkUserId missing from metadata' });
+      }
+
+      console.log(`Activating pro for clerkUserId=${clerkUserId}, email=${email}, paymentId=${paymentId}`);
+
+      await db.upsertSubscription(
+        clerkUserId,
+        email || '',
+        'pro_lifetime',
+        paymentId
+      );
+
+      console.log(`✅ User ${clerkUserId} upgraded to pro_lifetime`);
+      return res.status(200).json({ received: true, upgraded: true });
+    } catch (error: any) {
+      console.error('Webhook processing error:', error);
+      return res.status(500).json({ error: 'Failed to process webhook' });
+    }
+  }
+
+  // For all other event types, acknowledge receipt
+  res.status(200).json({ received: true });
+});
+
+// ── NEW: Create Dodo Checkout Session ────────────────────────────────────────
+// POST /api/create-checkout
+// Body: { clerkUserId, email }
+// Returns: { checkoutUrl }
+// This keeps the Dodo API key server-side only.
+
+app.post('/api/create-checkout', async (req, res) => {
+  const DODO_API_KEY = process.env.DODO_API_KEY;
+  const DODO_PRODUCT_ID = process.env.DODO_PRODUCT_ID;
+  const APP_URL = process.env.APP_URL || 'https://hoverconvert.vercel.app';
+
+  if (!DODO_API_KEY || !DODO_PRODUCT_ID) {
+    console.error('DODO_API_KEY or DODO_PRODUCT_ID not set');
+    return res.status(500).json({ success: false, message: 'Payment not configured' });
+  }
+
+  try {
+    // Verify user is authenticated with Clerk
+    const clerkUserId = await getClerkUserId(req);
+    if (!clerkUserId) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email is required' });
+    }
+
+    // Create a Dodo checkout session via their REST API
+    const dodoResponse = await fetch('https://api.dodopayments.com/checkout/sessions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${DODO_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        product_id: DODO_PRODUCT_ID,
+        customer: {
+          email: email,
+          name: email.split('@')[0]
+        },
+        metadata: {
+          clerkUserId: clerkUserId,
+          email: email
+        },
+        success_url: `${APP_URL}/payment-success`,
+        cancel_url: `${APP_URL}/pricing`
+      })
+    });
+
+    if (!dodoResponse.ok) {
+      const errText = await dodoResponse.text();
+      console.error('Dodo API error:', errText);
+      return res.status(500).json({ success: false, message: 'Failed to create checkout session' });
+    }
+
+    const dodoData = await dodoResponse.json() as any;
+    const checkoutUrl = dodoData.url || dodoData.checkout_url || dodoData.payment_url;
+
+    if (!checkoutUrl) {
+      return res.status(500).json({ success: false, message: 'No checkout URL returned' });
+    }
+
+    res.json({ success: true, checkoutUrl });
+  } catch (error: any) {
+    console.error('create-checkout error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// ── Health check ──────────────────────────────────────────────────────────────
+
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
 });
 
-// Start Server
+// ── Start Server ──────────────────────────────────────────────────────────────
+
 if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
   app.listen(PORT, () => {
     console.log(`HoverConvert backend running on port ${PORT}`);
@@ -197,4 +386,3 @@ if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
 }
 
 export default app;
-

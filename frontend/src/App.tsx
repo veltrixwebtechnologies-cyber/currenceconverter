@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Analytics } from '@vercel/analytics/react';
 import { track } from '@vercel/analytics';
+import {
+  useUser,
+  useAuth,
+  SignInButton,
+  UserButton
+} from '@clerk/clerk-react';
 import './App.css';
 
 // Safe event tracker
@@ -40,9 +46,22 @@ export default function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const currentView = path === '/' ? 'landing' : (path === '/customizer' ? 'customizer' : (path === '/dev-dashboard' ? 'dev-dashboard' : 'other'));
-  const setCurrentView = (view: 'landing' | 'customizer' | 'dev-dashboard') => {
-    navigate(view === 'landing' ? '/' : `/${view}`);
-  };
+
+  // Clerk hooks (safely handle when ClerkProvider is not present)
+  let clerkUser: any = null;
+  let clerkIsLoaded = true;
+  let clerkIsSignedIn = false;
+  let clerkGetToken: (() => Promise<string | null>) | null = null;
+  try {
+    const { user, isLoaded } = useUser();
+    const { isSignedIn, getToken } = useAuth();
+    clerkUser = user;
+    clerkIsLoaded = isLoaded;
+    clerkIsSignedIn = !!isSignedIn;
+    clerkGetToken = getToken;
+  } catch (_) {
+    // ClerkProvider not mounted — auth features disabled
+  }
 
   const navigate = (to: string) => {
     window.history.pushState(null, '', to);
@@ -63,6 +82,9 @@ export default function App() {
   const [userId, setUserId] = useState<string>('');
   const [isPro, setIsPro] = useState(false);
   const [licenseInfo, setLicenseInfo] = useState<License | null>(null);
+
+  // Premium status from backend (Clerk + Dodo)
+  const [premiumChecked, setPremiumChecked] = useState(false);
 
   // App Settings
   const [settings, setSettings] = useState<UserSettings>({
@@ -111,7 +133,7 @@ export default function App() {
     // Fetch exchange rates from backend
     fetchRates();
 
-    // Check if license key already activated
+    // Check if license key already activated (legacy)
     const storedLicense = localStorage.getItem('hc_license_info');
     if (storedLicense) {
       try {
@@ -123,6 +145,56 @@ export default function App() {
       }
     }
   }, []);
+
+  // Check premium status via Clerk auth when user loads
+  useEffect(() => {
+    if (!clerkIsLoaded || premiumChecked) return;
+
+    const checkPremium = async () => {
+      try {
+        const headers: Record<string, string> = {};
+        if (clerkIsSignedIn && clerkGetToken) {
+          const token = await clerkGetToken();
+          if (token) headers['Authorization'] = `Bearer ${token}`;
+        }
+        const res = await fetch(`${API_BASE}/check-premium`, { headers });
+        const data = await res.json() as { premium: boolean; plan: string; dailyLimit: number | null };
+        if (data.premium) {
+          setIsPro(true);
+        }
+      } catch (err) {
+        console.warn('Premium check failed, defaulting to free tier:', err);
+      } finally {
+        setPremiumChecked(true);
+      }
+    };
+
+    checkPremium();
+  }, [clerkIsLoaded, clerkIsSignedIn]);
+
+  // Sync Clerk Auth with Chrome Extension
+  useEffect(() => {
+    if (!clerkIsLoaded) return;
+    const syncAuthWithExtension = async () => {
+      if (clerkIsSignedIn && clerkGetToken && clerkUser) {
+        try {
+          const token = await clerkGetToken();
+          if (token) {
+            window.postMessage({
+              type: 'HOVERCONVERT_AUTH',
+              userId: clerkUser.id,
+              email: clerkUser.primaryEmailAddress?.emailAddress,
+              token: token
+            }, '*');
+          }
+        } catch (err) {
+          console.error('Failed to sync auth with extension:', err);
+        }
+      }
+    };
+    syncAuthWithExtension();
+  }, [clerkIsLoaded, clerkIsSignedIn, clerkUser]);
+
 
   // Fetch settings once userId is loaded
   useEffect(() => {
@@ -301,21 +373,6 @@ export default function App() {
     }
   };
 
-  const handleLogout = () => {
-    setIsPro(false);
-    setLicenseInfo(null);
-    localStorage.removeItem('hc_license_info');
-    // Revert settings to basic if they are Pro-only
-    const resetSettings: UserSettings = {
-      ...settings,
-      theme: 'light',
-      rateOverride: null
-    };
-    saveSettings(resetSettings);
-    setCurrentView('landing');
-    showToast('Logged out of Pro account.', 'info');
-  };
-
   return (
     <>
       {/* FLOAT NAV BAR */}
@@ -371,31 +428,47 @@ export default function App() {
               <button onClick={() => navigate('/customizer')} className="nav-secondary-btn">
                 🛠 Open Simulator
               </button>
-              {isPro ? (
-                <button onClick={() => navigate('/dev-dashboard')} className="nav-cta">
-                  📊 Dashboard
-                </button>
+              {clerkIsSignedIn ? (
+                isPro ? (
+                  <button onClick={() => navigate('/dev-dashboard')} className="nav-cta">
+                    📊 Dashboard
+                  </button>
+                ) : (
+                  <button onClick={() => navigate('/pricing')} className="nav-cta">
+                    ⚡ Upgrade to Pro
+                  </button>
+                )
               ) : (
-                <button onClick={() => setShowLicenseModal(true)} className="nav-cta">
-                  🔑 Activate Pro
+                <button onClick={() => navigate('/pricing')} className="nav-cta">
+                  ⚡ Get Pro — $4.99
                 </button>
               )}
             </>
           ) : (
             <>
-              {isPro ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span style={{ fontSize: '11px', color: 'var(--cy)', fontWeight: 'bold' }}>⭐ Pro User</span>
-                  <button onClick={handleLogout} className="nav-secondary-btn" style={{ padding: '6px 12px', fontSize: '12px' }}>
-                    Logout
-                  </button>
-                </div>
-              ) : (
-                <button onClick={() => setShowLicenseModal(true)} className="nav-cta">
+              {isPro && (
+                <span style={{ fontSize: '11px', color: 'var(--cy)', fontWeight: 'bold' }}>⭐ Pro</span>
+              )}
+              {!isPro && (
+                <button onClick={() => navigate('/pricing')} className="nav-cta" style={{ padding: '7px 14px', fontSize: '13px' }}>
                   ⚡ Go Pro
                 </button>
               )}
             </>
+          )}
+          {/* Clerk UserButton or Sign In */}
+          {clerkIsLoaded && (
+            clerkIsSignedIn ? (
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <UserButton afterSignOutUrl="/" />
+              </div>
+            ) : (
+              <SignInButton mode="modal" forceRedirectUrl={path === '/pricing' ? '/pricing' : undefined}>
+                <button className="nav-secondary-btn" style={{ padding: '7px 14px', fontSize: '13px' }}>
+                  Sign In
+                </button>
+              </SignInButton>
+            )
           )}
           <button className="hbg" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>☰</button>
         </div>
@@ -441,7 +514,6 @@ export default function App() {
       {path === '/' && (
         <LandingPage
           visibleElements={visibleElements}
-          setShowLicenseModal={setShowLicenseModal}
           navigate={navigate}
         />
       )}
@@ -464,6 +536,22 @@ export default function App() {
           settings={settings}
           setShowSupportModal={setShowSupportModal}
         />
+      )}
+
+      {path === '/pricing' && (
+        <PricingPage
+          navigate={navigate}
+          isPro={isPro}
+          clerkIsSignedIn={clerkIsSignedIn}
+          clerkIsLoaded={clerkIsLoaded}
+          clerkUser={clerkUser}
+          clerkGetToken={clerkGetToken}
+          showToast={showToast}
+        />
+      )}
+
+      {path === '/payment-success' && (
+        <PaymentSuccessPage navigate={navigate} />
       )}
 
       {path === '/usd-to-inr' && (
@@ -625,11 +713,10 @@ export default function App() {
    ═══════════════════════════════════════════════════ */
 interface LandingProps {
   visibleElements: Record<string, boolean>;
-  setShowLicenseModal: (show: boolean) => void;
   navigate: (to: string) => void;
 }
 
-function LandingPage({ visibleElements, setShowLicenseModal, navigate }: LandingProps) {
+function LandingPage({ visibleElements, navigate }: LandingProps) {
   // Demo strip calculator state
   const [demoTab, setDemoTab] = useState({ sym: '$', amount: 120, inr: 10200, code: 'USD', name: 'US Dollar' });
   const [activeTabIdx, setActiveTabIdx] = useState(0);
@@ -1228,7 +1315,7 @@ function LandingPage({ visibleElements, setShowLicenseModal, navigate }: Landing
               <li>Favorite currencies</li>
               <li>Priority support</li>
             </ul>
-            <button onClick={() => { trackEvent('cta_pricing_explore', { plan: 'pro' }); setShowLicenseModal(true); }} className="pbtn pbtn-p">
+            <button onClick={() => { trackEvent('cta_pricing_explore', { plan: 'pro' }); navigate('/pricing'); }} className="pbtn pbtn-p">
               Upgrade to Pro — $4.99
             </button>
           </div>
@@ -1349,6 +1436,292 @@ function LandingPage({ visibleElements, setShowLicenseModal, navigate }: Landing
         </div>
       </section>
     </>
+  );
+}
+
+/* ═══════════════════════════════════════════════════
+   PRICING PAGE COMPONENT
+   ═══════════════════════════════════════════════════ */
+interface PricingPageProps {
+  navigate: (to: string) => void;
+  isPro: boolean;
+  clerkIsSignedIn: boolean;
+  clerkIsLoaded: boolean;
+  clerkUser: any;
+  clerkGetToken: (() => Promise<string | null>) | null;
+  showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
+}
+
+function PricingPage({ navigate, isPro, clerkIsSignedIn, clerkIsLoaded, clerkUser, clerkGetToken, showToast }: PricingPageProps) {
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleUpgrade = async () => {
+    if (!clerkIsSignedIn) {
+      // Not logged in — prompt sign in
+      showToast('Please sign in first to upgrade to Pro.', 'info');
+      return;
+    }
+
+    const email = clerkUser?.primaryEmailAddress?.emailAddress;
+    if (!email) {
+      showToast('Could not retrieve your email. Please try again.', 'error');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (clerkGetToken) {
+        const token = await clerkGetToken();
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const res = await fetch(`${API_BASE}/create-checkout`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ email })
+      });
+
+      const data = await res.json() as { success: boolean; checkoutUrl?: string; message?: string };
+      if (data.success && data.checkoutUrl) {
+        window.location.href = data.checkoutUrl;
+      } else {
+        showToast(data.message || 'Failed to start checkout. Please try again.', 'error');
+      }
+    } catch (err) {
+      console.error('Checkout error:', err);
+      showToast('Network error. Please check your connection and try again.', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ minHeight: '100vh', paddingTop: '80px', paddingBottom: '80px', background: 'var(--bg)' }}>
+      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 24px' }}>
+
+        {/* Header */}
+        <div style={{ textAlign: 'center', marginBottom: '56px' }}>
+          <div className="sec-eyebrow" style={{ marginBottom: '12px' }}>Simple Pricing</div>
+          <h1 style={{ fontFamily: 'Space Grotesk', fontSize: 'clamp(32px, 5vw, 52px)', fontWeight: 800, lineHeight: 1.15, marginBottom: '16px' }}>
+            Choose Your Plan
+          </h1>
+          <p style={{ fontSize: '17px', color: 'var(--tx2)', maxWidth: '480px', margin: '0 auto' }}>
+            Start free. Upgrade once. Use forever. No subscriptions, no surprises.
+          </p>
+        </div>
+
+        {/* Plan Cards */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px', alignItems: 'start' }}>
+          {/* Free Plan */}
+          <div className="pcard" style={{ padding: '32px', borderRadius: '20px', background: 'var(--bg2)', border: '1px solid var(--br)' }}>
+            <div className="pname" style={{ fontSize: '14px', fontWeight: 700, color: 'var(--tx2)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>Free Plan</div>
+            <div className="pprice" style={{ fontSize: '42px', fontWeight: 800, fontFamily: 'Space Grotesk', marginBottom: '4px' }}>$0</div>
+            <div className="pterm" style={{ fontSize: '13px', color: 'var(--tx3)', marginBottom: '28px' }}>Forever free · No account needed</div>
+            <ul className="pfeat" style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '28px' }}>
+              {[
+                '50 conversions / day',
+                'Top currencies',
+                'Hover tooltips',
+                'Works on all websites',
+              ].map((f) => <li key={f} style={{ display: 'flex', gap: '8px', fontSize: '14px' }}><span style={{ color: '#22d3ee' }}>✓</span> {f}</li>)}
+              {[
+                'Unlimited conversions',
+                'Dark mode & glass UI',
+                '160+ currencies',
+                'Favorite currencies',
+              ].map((f) => <li key={f} className="no" style={{ display: 'flex', gap: '8px', fontSize: '14px', color: 'var(--tx3)', textDecoration: 'line-through' }}><span>✕</span> {f}</li>)}
+            </ul>
+            <button
+              className="pbtn pbtn-f"
+              onClick={() => navigate('/customizer')}
+              style={{ width: '100%', padding: '13px', borderRadius: '12px', background: 'transparent', border: '1px solid var(--br)', color: 'var(--tx2)', cursor: 'pointer', fontWeight: 600, fontSize: '15px' }}
+            >
+              Try Free Simulator
+            </button>
+          </div>
+
+          {/* Pro Plan */}
+          <div className="pcard hot" style={{ padding: '32px', borderRadius: '20px', background: 'linear-gradient(135deg, rgba(124,110,250,0.12), rgba(34,211,238,0.08))', border: '1px solid rgba(124,110,250,0.4)', position: 'relative', overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '3px', background: 'linear-gradient(90deg, var(--vi), var(--cy))' }}></div>
+            <div className="pbadge" style={{ display: 'inline-block', fontSize: '11px', fontWeight: 700, background: 'linear-gradient(90deg, var(--vi), var(--cy))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '8px' }}>⭐ Best Value · Most Popular</div>
+            <div className="pname" style={{ fontSize: '14px', fontWeight: 700, color: 'var(--tx)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>Pro Lifetime</div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '4px' }}>
+              <div className="pprice" style={{ fontSize: '42px', fontWeight: 800, fontFamily: 'Space Grotesk' }}>$4.99</div>
+              <span style={{ fontSize: '13px', color: 'var(--tx3)' }}>one-time</span>
+            </div>
+            <div className="pterm" style={{ fontSize: '13px', color: 'var(--tx3)', marginBottom: '28px' }}>Lifetime access · Pay once, use forever</div>
+            <ul className="pfeat" style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '28px' }}>
+              {[
+                'Unlimited conversions',
+                '160+ currencies',
+                'Premium dark & glass UI',
+                'Manual rate override',
+                'Favorite currencies (unlimited)',
+                'Priority email support',
+                '30-day money-back guarantee',
+              ].map((f) => <li key={f} style={{ display: 'flex', gap: '8px', fontSize: '14px' }}><span style={{ color: '#22d3ee' }}>✓</span> {f}</li>)}
+            </ul>
+
+            {isPro ? (
+              <div style={{ textAlign: 'center', padding: '13px', borderRadius: '12px', background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.3)', color: 'var(--cy)', fontWeight: 700, fontSize: '15px' }}>
+                ✓ You're already a Pro member!
+              </div>
+            ) : clerkIsLoaded && !clerkIsSignedIn ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <SignInButton mode="modal" forceRedirectUrl="/pricing">
+                  <button
+                    className="pbtn pbtn-p"
+                    style={{ width: '100%', padding: '14px', borderRadius: '12px', background: 'linear-gradient(135deg, var(--vi), var(--cy))', border: 'none', color: '#fff', fontWeight: 700, fontSize: '16px', cursor: 'pointer' }}
+                  >
+                    Sign In to Upgrade — $4.99
+                  </button>
+                </SignInButton>
+                <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--tx3)' }}>
+                  You need to sign in first so we can link your purchase to your account.
+                </p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <button
+                  className="pbtn pbtn-p"
+                  onClick={handleUpgrade}
+                  disabled={isLoading}
+                  style={{ width: '100%', padding: '14px', borderRadius: '12px', background: isLoading ? 'rgba(124,110,250,0.4)' : 'linear-gradient(135deg, var(--vi), var(--cy))', border: 'none', color: '#fff', fontWeight: 700, fontSize: '16px', cursor: isLoading ? 'not-allowed' : 'pointer', transition: 'all 0.2s' }}
+                >
+                  {isLoading ? '⏳ Redirecting to checkout...' : '⚡ Upgrade to Pro — $4.99'}
+                </button>
+                <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--tx3)' }}>
+                  🔒 Secure payment via Dodo Payments · Instant activation
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Trust badges */}
+        <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '24px', marginTop: '48px', padding: '24px', borderRadius: '16px', background: 'var(--bg2)', border: '1px solid var(--br)' }}>
+          {['🔒 256-bit SSL encryption', '💳 Secure payment via Dodo', '↩️ 30-day money-back guarantee', '⚡ Instant activation'].map((badge) => (
+            <span key={badge} style={{ fontSize: '13px', color: 'var(--tx2)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              {badge}
+            </span>
+          ))}
+        </div>
+
+        {/* FAQ */}
+        <div style={{ marginTop: '56px', textAlign: 'center' }}>
+          <h2 style={{ fontFamily: 'Space Grotesk', fontSize: '22px', fontWeight: 700, marginBottom: '24px' }}>Common Questions</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', textAlign: 'left' }}>
+            {[
+              { q: 'Is this really a one-time payment?', a: 'Yes. Pay $4.99 once and use HoverConvert Pro forever. No subscriptions, no renewals, no hidden fees.' },
+              { q: 'What happens to my free conversions while I\'m not logged in?', a: 'Free users get 50 conversions per day without any account required. The extension tracks this locally using chrome.storage. No data is sent to servers.' },
+              { q: 'How does the extension know I\'m a Pro user?', a: 'After payment, your account is marked as premium in our secure database. The extension calls our API (using your Clerk session token) to verify your status. No payment data is stored in the extension.' },
+              { q: 'What if I need a refund?', a: 'No problem. 30-day money-back guarantee, no questions asked. Just email us and we\'ll process it immediately.' },
+            ].map((item, i) => (
+              <div key={i} style={{ padding: '16px 20px', borderRadius: '12px', background: 'var(--bg2)', border: '1px solid var(--br)' }}>
+                <div style={{ fontWeight: 600, fontSize: '14px', marginBottom: '6px' }}>{item.q}</div>
+                <div style={{ fontSize: '13px', color: 'var(--tx2)', lineHeight: 1.6 }}>{item.a}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════
+   PAYMENT SUCCESS PAGE COMPONENT
+   ═══════════════════════════════════════════════════ */
+function PaymentSuccessPage({ navigate }: { navigate: (to: string) => void }) {
+  const [confettiItems] = useState(() =>
+    Array.from({ length: 40 }, (_, i) => ({
+      id: i,
+      left: `${Math.random() * 100}%`,
+      delay: `${Math.random() * 2}s`,
+      color: ['#7c6efa', '#22d3ee', '#a78bfa', '#34d399', '#f59e0b'][Math.floor(Math.random() * 5)],
+      size: `${6 + Math.random() * 8}px`,
+    }))
+  );
+
+  useEffect(() => {
+    // Re-check premium status after successful payment
+    // The webhook may take a few seconds to fire
+    const timer = setTimeout(async () => {
+      try {
+        await fetch(`${API_BASE}/check-premium`);
+      } catch (_) {}
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  return (
+    <div style={{ minHeight: '100vh', paddingTop: '80px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', position: 'relative', overflow: 'hidden' }}>
+
+      {/* Confetti animation */}
+      <style>{`
+        @keyframes confetti-fall {
+          0% { transform: translateY(-20px) rotate(0deg); opacity: 1; }
+          100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+        }
+      `}</style>
+      {confettiItems.map((item) => (
+        <div
+          key={item.id}
+          style={{
+            position: 'fixed', top: '-20px', left: item.left,
+            width: item.size, height: item.size,
+            background: item.color, borderRadius: '2px',
+            animation: `confetti-fall 3s ${item.delay} ease-in forwards`,
+            pointerEvents: 'none', zIndex: 0,
+          }}
+        />
+      ))}
+
+      <div style={{ maxWidth: '520px', width: '100%', padding: '24px', textAlign: 'center', position: 'relative', zIndex: 1 }}>
+        <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'linear-gradient(135deg, rgba(124,110,250,0.2), rgba(34,211,238,0.2))', border: '2px solid rgba(124,110,250,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px', fontSize: '36px' }}>
+          🎉
+        </div>
+
+        <div className="sec-eyebrow" style={{ marginBottom: '12px' }}>Payment Successful</div>
+        <h1 style={{ fontFamily: 'Space Grotesk', fontSize: 'clamp(28px, 5vw, 40px)', fontWeight: 800, marginBottom: '16px', lineHeight: 1.2 }}>
+          Welcome to <span className="grad">HoverConvert Pro!</span>
+        </h1>
+        <p style={{ fontSize: '16px', color: 'var(--tx2)', lineHeight: 1.7, marginBottom: '32px' }}>
+          Your payment has been confirmed. Your account is being upgraded to Pro — this usually takes less than 30 seconds. Enjoy unlimited currency conversions, 160+ currencies, and premium UI themes!
+        </p>
+
+        <div style={{ padding: '20px', borderRadius: '16px', background: 'rgba(34,211,238,0.05)', border: '1px solid rgba(34,211,238,0.2)', marginBottom: '32px', textAlign: 'left' }}>
+          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--cy)', marginBottom: '12px' }}>✓ What's unlocked:</div>
+          {['Unlimited conversions (no daily limit)', '160+ currencies worldwide', 'Premium dark & glass tooltip UI', 'Manual rate override', 'Favorite currencies', 'Priority support'].map((item) => (
+            <div key={item} style={{ display: 'flex', gap: '8px', fontSize: '13px', color: 'var(--tx2)', padding: '4px 0' }}>
+              <span style={{ color: 'var(--cy)' }}>✓</span> {item}
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <button
+            onClick={() => navigate('/')}
+            className="btn-p"
+            style={{ padding: '14px 32px', fontSize: '16px', borderRadius: '12px', width: '100%' }}
+          >
+            ⚡ Go to Home Page
+          </button>
+          <button
+            onClick={() => navigate('/customizer')}
+            style={{ padding: '12px 32px', fontSize: '14px', borderRadius: '12px', width: '100%', background: 'transparent', border: '1px solid var(--br)', color: 'var(--tx2)', cursor: 'pointer' }}
+          >
+            🛠 Open Extension Simulator
+          </button>
+        </div>
+
+        <p style={{ marginTop: '24px', fontSize: '12px', color: 'var(--tx3)' }}>
+          If Pro features don't appear immediately, please sign out and sign back in. A confirmation email will be sent to your registered address.
+        </p>
+      </div>
+    </div>
   );
 }
 

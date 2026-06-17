@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --bg2: #161c2c;
+      --tx: #f8fafc;
+      --tx2: #94a3b8;
+      --tx3: #64748b;
+      --vi: #7c6efa;
+      --cy: #22d3ee;
+      --br: rgba(255, 255, 255, 0.08);
+    }
+    body {
+      width: 320px;
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--tx);
+      padding: 16px;
+      box-sizing: border-box;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--br);
+      padding-bottom: 12px;
+      margin-bottom: 16px;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      font-weight: 700;
+      font-size: 16px;
+      gap: 6px;
+    }
+    .logo-mark {
+      color: var(--cy);
+      font-size: 18px;
+    }
+    .badge {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 99px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .badge-free {
+      background: rgba(148, 163, 184, 0.15);
+      color: var(--tx2);
+    }
+    .badge-pro {
+      background: linear-gradient(90deg, var(--vi), var(--cy));
+      color: white;
+    }
+    .card {
+      background: var(--bg2);
+      border: 1px solid var(--br);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 16px;
+    }
+    .stat-label {
+      font-size: 12px;
+      color: var(--tx2);
+      margin-bottom: 4px;
+    }
+    .stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      font-feature-settings: "tnum";
+    }
+    .progress-bar {
+      height: 6px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+      margin-top: 8px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: var(--cy);
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+    .btn {
+      width: 100%;
+      padding: 10px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--vi), var(--cy));
+      color: white;
+    }
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid var(--br);
+      color: var(--tx);
+      margin-top: 8px;
+    }
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+    .footer-text {
+      text-align: center;
+      font-size: 11px;
+      color: var(--tx3);
+      margin-top: 12px;
+    }
+    .auth-section {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      border-top: 1px solid var(--br);
+      padding-top: 14px;
+      margin-top: 14px;
+    }
+    .user-info {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--tx2);
+    }
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">
+      <span class="logo-mark">⚡</span> HoverConvert
+    </div>
+    <span id="plan-badge" class="badge badge-free">Free</span>
+  </div>
+
+  <div class="card">
+    <div id="usage-section">
+      <div class="stat-label">Conversions Today</div>
+      <div class="stat-value"><span id="conversions-count">0</span> / 50</div>
+      <div class="progress-bar">
+        <div id="conversions-progress" class="progress-fill"></div>
+      </div>
+    </div>
+    <div id="unlimited-section" class="hidden">
+      <div class="stat-label">Conversions Today</div>
+      <div class="stat-value" style="color: var(--cy);">✨ Unlimited</div>
+      <div style="font-size: 12px; color: var(--tx2); margin-top: 4px;">Thank you for supporting HoverConvert Pro!</div>
+    </div>
+  </div>
+
+  <div id="cta-upgrade">
+    <button id="btn-upgrade" class="btn btn-primary">⚡ Upgrade to Pro ($4.99)</button>
+  </div>
+
+  <div class="auth-section">
+    <div class="user-info">
+      <span>Account:</span>
+      <span id="account-status">Loading...</span>
+    </div>
+    <button id="btn-login" class="btn btn-secondary">🔑 Sign In / Sign Up</button>
+    <button id="btn-sync" class="btn btn-secondary hidden">🔄 Sync Premium Status</button>
+    <button id="btn-logout" class="btn btn-secondary hidden">Sign Out</button>
+  </div>
+
+  <div class="footer-text">
+    Hover over prices on any page to convert.
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
