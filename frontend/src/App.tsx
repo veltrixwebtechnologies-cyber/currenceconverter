@@ -82,7 +82,24 @@ export default function App() {
 
   // User details & License keys
   const [userId, setUserId] = useState<string>('');
-  const [isPro, setIsPro] = useState(false);
+  const [isPro, setIsPro] = useState<boolean>(() => {
+    // Check legacy license first
+    const storedLicense = localStorage.getItem('hc_license_info');
+    if (storedLicense) return true;
+
+    // Check Clerk cached status
+    const cached = localStorage.getItem('hc_premium_status');
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        // Cache is valid for 24 hours
+        if (Date.now() - parsed.timestamp < 24 * 60 * 60 * 1000) {
+          return !!parsed.premium;
+        }
+      } catch (_) {}
+    }
+    return false;
+  });
   const [licenseInfo, setLicenseInfo] = useState<License | null>(null);
 
 
@@ -153,13 +170,35 @@ export default function App() {
       if (clerkIsSignedIn && clerkGetToken) {
         const token = await clerkGetToken();
         if (token) headers['Authorization'] = `Bearer ${token}`;
+      } else {
+        // Not signed in: clear local premium status cache
+        localStorage.removeItem('hc_premium_status');
       }
+
       const res = await fetch(`${API_BASE}/check-premium`, { headers });
       const data = await res.json() as { premium: boolean; plan: string; dailyLimit: number | null };
-      setIsPro(!!data.premium);
-      return !!data.premium;
+
+      const premiumStatus = !!data.premium;
+      setIsPro(premiumStatus);
+
+      if (clerkIsSignedIn) {
+        localStorage.setItem('hc_premium_status', JSON.stringify({
+          premium: premiumStatus,
+          timestamp: Date.now()
+        }));
+      }
+      return premiumStatus;
     } catch (err) {
       console.warn('Premium check failed, defaulting to free tier:', err);
+      // Fallback to cached status on network failure
+      const cached = localStorage.getItem('hc_premium_status');
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          setIsPro(!!parsed.premium);
+          return !!parsed.premium;
+        } catch (_) {}
+      }
       setIsPro(false);
       return false;
     }

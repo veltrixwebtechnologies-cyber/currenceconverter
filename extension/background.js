@@ -135,7 +135,7 @@ async function syncPremiumStatus() {
         }
 
         const resData = await response.json();
-        const isPro = resData.success && resData.pro;
+        const isPro = !!(resData.premium || resData.pro);
         chrome.storage.local.set({
           plan: isPro ? 'pro_lifetime' : 'free',
           premium: isPro
