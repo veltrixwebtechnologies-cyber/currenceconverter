@@ -550,7 +550,6 @@ export default function App() {
           clerkGetToken={clerkGetToken}
           showToast={showToast}
           clerkEnabled={clerkEnabled}
-          setShowLicenseModal={setShowLicenseModal}
         />
       )}
 
@@ -1455,10 +1454,9 @@ interface PricingPageProps {
   clerkGetToken: (() => Promise<string | null>) | null;
   showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
   clerkEnabled: boolean;
-  setShowLicenseModal: (show: boolean) => void;
 }
 
-function PricingPage({ navigate, isPro, clerkIsSignedIn, clerkIsLoaded, clerkUser, clerkGetToken, showToast, clerkEnabled, setShowLicenseModal }: PricingPageProps) {
+function PricingPage({ navigate, isPro, clerkIsSignedIn, clerkIsLoaded, clerkUser, clerkGetToken, showToast, clerkEnabled }: PricingPageProps) {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleUpgrade = async () => {
@@ -1577,13 +1575,13 @@ function PricingPage({ navigate, isPro, clerkIsSignedIn, clerkIsLoaded, clerkUse
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <button
                   className="pbtn pbtn-p"
-                  onClick={() => setShowLicenseModal(true)}
+                  onClick={() => showToast('Clerk authentication is not configured. Please set VITE_CLERK_PUBLISHABLE_KEY in your environment to sign in.', 'error')}
                   style={{ width: '100%', padding: '14px', borderRadius: '12px', background: 'linear-gradient(135deg, var(--vi), var(--cy))', border: 'none', color: '#fff', fontWeight: 700, fontSize: '16px', cursor: 'pointer' }}
                 >
-                  🔑 Activate Pro License
+                  Sign In to Upgrade — $4.99
                 </button>
                 <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--tx3)' }}>
-                  Clerk authentication is disabled. Activate Pro using a license key.
+                  You need to sign in first so we can link your purchase to your account.
                 </p>
               </div>
             ) : clerkIsLoaded && !clerkIsSignedIn ? (
