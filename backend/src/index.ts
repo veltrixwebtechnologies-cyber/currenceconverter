@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { createClerkClient, verifyToken } from '@clerk/backend';
 import { Webhook } from 'svix';
+import DodoPayments from 'dodopayments';
 import { db } from './db';
 
 dotenv.config();
@@ -329,36 +330,33 @@ app.post('/api/create-checkout', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email is required' });
     }
 
-    // Create a Dodo checkout session via their REST API
-    const dodoResponse = await fetch('https://api.dodopayments.com/checkout/sessions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${DODO_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        product_id: DODO_PRODUCT_ID,
-        customer: {
-          email: email,
-          name: email.split('@')[0]
-        },
-        metadata: {
-          clerkUserId: clerkUserId,
-          email: email
-        },
-        success_url: `${APP_URL}/payment-success`,
-        cancel_url: `${APP_URL}/pricing`
-      })
+    // Initialize DodoPayments client
+    const dodo = new DodoPayments({
+      bearerToken: DODO_API_KEY,
+      environment: DODO_API_KEY.includes('test') || DODO_API_KEY.startsWith('E-') ? 'test_mode' : 'live_mode'
     });
 
-    if (!dodoResponse.ok) {
-      const errText = await dodoResponse.text();
-      console.error('Dodo API error:', errText);
-      return res.status(500).json({ success: false, message: 'Failed to create checkout session' });
-    }
+    // Create a Dodo checkout session via SDK
+    const session = await dodo.checkoutSessions.create({
+      product_cart: [
+        {
+          product_id: DODO_PRODUCT_ID,
+          quantity: 1
+        }
+      ],
+      customer: {
+        email: email,
+        name: email.split('@')[0]
+      },
+      metadata: {
+        clerkUserId: clerkUserId,
+        email: email
+      },
+      return_url: `${APP_URL}/payment-success`,
+      cancel_url: `${APP_URL}/pricing`
+    });
 
-    const dodoData = await dodoResponse.json() as any;
-    const checkoutUrl = dodoData.url || dodoData.checkout_url || dodoData.payment_url;
+    const checkoutUrl = session.checkout_url;
 
     if (!checkoutUrl) {
       return res.status(500).json({ success: false, message: 'No checkout URL returned' });
