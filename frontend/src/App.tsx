@@ -85,8 +85,7 @@ export default function App() {
   const [isPro, setIsPro] = useState(false);
   const [licenseInfo, setLicenseInfo] = useState<License | null>(null);
 
-  // Premium status from backend (Clerk + Dodo)
-  const [premiumChecked, setPremiumChecked] = useState(false);
+
 
   // App Settings
   const [settings, setSettings] = useState<UserSettings>({
@@ -163,8 +162,6 @@ export default function App() {
       } catch (err) {
         console.warn('Premium check failed, defaulting to free tier:', err);
         setIsPro(false);
-      } finally {
-        setPremiumChecked(true);
       }
     };
 
@@ -486,6 +483,7 @@ export default function App() {
         <LandingPage
           visibleElements={visibleElements}
           navigate={navigate}
+          isPro={isPro}
         />
       )}
 
@@ -675,9 +673,10 @@ export default function App() {
 interface LandingProps {
   visibleElements: Record<string, boolean>;
   navigate: (to: string) => void;
+  isPro: boolean;
 }
 
-function LandingPage({ visibleElements, navigate }: LandingProps) {
+function LandingPage({ visibleElements, navigate, isPro }: LandingProps) {
   // Demo strip calculator state
   const [demoTab, setDemoTab] = useState({ sym: '$', amount: 120, inr: 10200, code: 'USD', name: 'US Dollar' });
   const [activeTabIdx, setActiveTabIdx] = useState(0);
