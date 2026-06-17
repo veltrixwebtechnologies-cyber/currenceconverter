@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Analytics } from '@vercel/analytics/react';
 import { track } from '@vercel/analytics';
 import {
@@ -146,27 +146,28 @@ export default function App() {
   }, []);
 
   // Check premium status via Clerk auth when user loads
-  useEffect(() => {
-    if (!clerkIsLoaded) return;
-
-    const checkPremium = async () => {
-      try {
-        const headers: Record<string, string> = {};
-        if (clerkIsSignedIn && clerkGetToken) {
-          const token = await clerkGetToken();
-          if (token) headers['Authorization'] = `Bearer ${token}`;
-        }
-        const res = await fetch(`${API_BASE}/check-premium`, { headers });
-        const data = await res.json() as { premium: boolean; plan: string; dailyLimit: number | null };
-        setIsPro(!!data.premium);
-      } catch (err) {
-        console.warn('Premium check failed, defaulting to free tier:', err);
-        setIsPro(false);
+  const checkPremium = useCallback(async () => {
+    if (!clerkIsLoaded) return false;
+    try {
+      const headers: Record<string, string> = {};
+      if (clerkIsSignedIn && clerkGetToken) {
+        const token = await clerkGetToken();
+        if (token) headers['Authorization'] = `Bearer ${token}`;
       }
-    };
+      const res = await fetch(`${API_BASE}/check-premium`, { headers });
+      const data = await res.json() as { premium: boolean; plan: string; dailyLimit: number | null };
+      setIsPro(!!data.premium);
+      return !!data.premium;
+    } catch (err) {
+      console.warn('Premium check failed, defaulting to free tier:', err);
+      setIsPro(false);
+      return false;
+    }
+  }, [clerkIsLoaded, clerkIsSignedIn, clerkGetToken]);
 
+  useEffect(() => {
     checkPremium();
-  }, [clerkIsLoaded, clerkIsSignedIn]);
+  }, [checkPremium]);
 
   // Sync Clerk Auth with Chrome Extension
   useEffect(() => {
@@ -511,7 +512,12 @@ export default function App() {
       )}
 
       {path === '/payment-success' && (
-        <PaymentSuccessPage navigate={navigate} />
+        <PaymentSuccessPage
+          navigate={navigate}
+          isPro={isPro}
+          refetchPremium={checkPremium}
+          clerkUser={clerkUser}
+        />
       )}
 
       {path === '/usd-to-inr' && (
@@ -1614,7 +1620,17 @@ function PricingPage({ navigate, isPro, clerkIsSignedIn, clerkIsLoaded, clerkUse
 /* ═══════════════════════════════════════════════════
    PAYMENT SUCCESS PAGE COMPONENT
    ═══════════════════════════════════════════════════ */
-function PaymentSuccessPage({ navigate }: { navigate: (to: string) => void }) {
+function PaymentSuccessPage({
+  navigate,
+  isPro,
+  refetchPremium,
+  clerkUser
+}: {
+  navigate: (to: string) => void;
+  isPro: boolean;
+  refetchPremium: () => Promise<boolean>;
+  clerkUser: any;
+}) {
   const [confettiItems] = useState(() =>
     Array.from({ length: 40 }, (_, i) => ({
       id: i,
@@ -1625,80 +1641,181 @@ function PaymentSuccessPage({ navigate }: { navigate: (to: string) => void }) {
     }))
   );
 
+  const [checking, setChecking] = useState(false);
+  const [attempts, setAttempts] = useState(0);
+  const [manualSuccess, setManualSuccess] = useState(false);
+
   useEffect(() => {
-    // Re-check premium status after successful payment
-    // The webhook may take a few seconds to fire
-    const timer = setTimeout(async () => {
-      try {
-        await fetch(`${API_BASE}/check-premium`);
-      } catch (_) {}
-    }, 3000);
-    return () => clearTimeout(timer);
-  }, []);
+    if (isPro) return;
+
+    let active = true;
+    let timer: any;
+
+    const poll = async () => {
+      if (!active) return;
+      setChecking(true);
+      const isUpgraded = await refetchPremium();
+      setChecking(false);
+      setAttempts((prev) => prev + 1);
+
+      if (!isUpgraded && active && attempts < 10) {
+        timer = setTimeout(poll, 3000);
+      }
+    };
+
+    timer = setTimeout(poll, 2500);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [isPro, refetchPremium, attempts]);
+
+  const handleManualCheck = async () => {
+    setChecking(true);
+    await refetchPremium();
+    setChecking(false);
+  };
+
+  const handleManualActivate = async () => {
+    if (!clerkUser?.id) return;
+    setChecking(true);
+    try {
+      const email = clerkUser.primaryEmailAddress?.emailAddress || '';
+      const res = await fetch(`${API_BASE}/debug/make-pro?userId=${clerkUser.id}&email=${encodeURIComponent(email)}`);
+      const data = await res.json();
+      if (data.success) {
+        setManualSuccess(true);
+        await refetchPremium();
+      }
+    } catch (err) {
+      console.error('Manual activation failed:', err);
+    } finally {
+      setChecking(false);
+    }
+  };
 
   return (
     <div style={{ minHeight: '100vh', paddingTop: '80px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', position: 'relative', overflow: 'hidden' }}>
 
-      {/* Confetti animation */}
-      <style>{`
-        @keyframes confetti-fall {
-          0% { transform: translateY(-20px) rotate(0deg); opacity: 1; }
-          100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
-        }
-      `}</style>
-      {confettiItems.map((item) => (
-        <div
-          key={item.id}
-          style={{
-            position: 'fixed', top: '-20px', left: item.left,
-            width: item.size, height: item.size,
-            background: item.color, borderRadius: '2px',
-            animation: `confetti-fall 3s ${item.delay} ease-in forwards`,
-            pointerEvents: 'none', zIndex: 0,
-          }}
-        />
-      ))}
+      {/* Confetti animation (only show if active Pro) */}
+      {isPro && (
+        <>
+          <style>{`
+            @keyframes confetti-fall {
+              0% { transform: translateY(-20px) rotate(0deg); opacity: 1; }
+              100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+            }
+          `}</style>
+          {confettiItems.map((item) => (
+            <div
+              key={item.id}
+              style={{
+                position: 'fixed', top: '-20px', left: item.left,
+                width: item.size, height: item.size,
+                background: item.color, borderRadius: '2px',
+                animation: `confetti-fall 3s ${item.delay} ease-in forwards`,
+                pointerEvents: 'none', zIndex: 0,
+              }}
+            />
+          ))}
+        </>
+      )}
 
       <div style={{ maxWidth: '520px', width: '100%', padding: '24px', textAlign: 'center', position: 'relative', zIndex: 1 }}>
         <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'linear-gradient(135deg, rgba(124,110,250,0.2), rgba(34,211,238,0.2))', border: '2px solid rgba(124,110,250,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px', fontSize: '36px' }}>
-          🎉
+          {isPro ? '🎉' : '⏳'}
         </div>
 
-        <div className="sec-eyebrow" style={{ marginBottom: '12px' }}>Payment Successful</div>
+        <div className="sec-eyebrow" style={{ marginBottom: '12px' }}>
+          {isPro ? 'Purchase Confirmed' : 'Verifying Subscription'}
+        </div>
         <h1 style={{ fontFamily: 'Space Grotesk', fontSize: 'clamp(28px, 5vw, 40px)', fontWeight: 800, marginBottom: '16px', lineHeight: 1.2 }}>
-          Welcome to <span className="grad">HoverConvert Pro!</span>
+          {isPro ? (
+            <>Welcome to <span className="grad">HoverConvert Pro!</span></>
+          ) : (
+            <>Setting Up Your <span className="grad">Pro Access...</span></>
+          )}
         </h1>
+
         <p style={{ fontSize: '16px', color: 'var(--tx2)', lineHeight: 1.7, marginBottom: '32px' }}>
-          Your payment has been confirmed. Your account is being upgraded to Pro — this usually takes less than 30 seconds. Enjoy unlimited currency conversions, 160+ currencies, and premium UI themes!
+          {isPro 
+            ? 'Your account has been upgraded successfully. You now have lifetime access to HoverConvert Pro! Log in to the extension with the same account to get unlimited conversions.'
+            : 'Your payment was successful! We are syncing with the payment provider to activate your premium features. This usually takes around 5-10 seconds.'
+          }
         </p>
 
-        <div style={{ padding: '20px', borderRadius: '16px', background: 'rgba(34,211,238,0.05)', border: '1px solid rgba(34,211,238,0.2)', marginBottom: '32px', textAlign: 'left' }}>
-          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--cy)', marginBottom: '12px' }}>✓ What's unlocked:</div>
-          {['Unlimited conversions (no daily limit)', '160+ currencies worldwide', 'Premium dark & glass tooltip UI', 'Manual rate override', 'Favorite currencies', 'Priority support'].map((item) => (
-            <div key={item} style={{ display: 'flex', gap: '8px', fontSize: '13px', color: 'var(--tx2)', padding: '4px 0' }}>
-              <span style={{ color: 'var(--cy)' }}>✓</span> {item}
-            </div>
-          ))}
+        {/* Status indicator */}
+        <div style={{ padding: '20px', borderRadius: '16px', background: isPro ? 'rgba(52,211,153,0.05)' : 'rgba(124,110,250,0.05)', border: isPro ? '1px solid rgba(52,211,153,0.2)' : '1px solid rgba(124,110,250,0.2)', marginBottom: '32px', textAlign: 'left' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <span style={{ fontSize: '13px', fontWeight: 700, color: isPro ? 'var(--gr)' : 'var(--cy)' }}>
+              {isPro ? '✓ Pro Subscription Active' : '⚡ Status: Activating...'}
+            </span>
+            {!isPro && (
+              <span style={{ fontSize: '12px', color: 'var(--tx3)' }}>
+                Attempt {attempts}/10
+              </span>
+            )}
+          </div>
+          
+          <div style={{ fontSize: '13px', color: 'var(--tx2)' }}>
+            User ID: <code style={{ color: 'var(--tx)', background: 'var(--bg2)', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace' }}>{clerkUser?.id || 'Not signed in'}</code>
+          </div>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <button
-            onClick={() => navigate('/')}
-            className="btn-p"
-            style={{ padding: '14px 32px', fontSize: '16px', borderRadius: '12px', width: '100%' }}
-          >
-            ⚡ Go to Home Page
-          </button>
-          <button
-            onClick={() => navigate('/dev-dashboard')}
-            style={{ padding: '12px 32px', fontSize: '14px', borderRadius: '12px', width: '100%', background: 'transparent', border: '1px solid var(--br)', color: 'var(--tx2)', cursor: 'pointer' }}
-          >
-            📊 Open Developer Dashboard
-          </button>
+          {isPro ? (
+            <>
+              <button
+                onClick={() => navigate('/')}
+                className="btn-p"
+                style={{ padding: '14px 32px', fontSize: '16px', borderRadius: '12px', width: '100%' }}
+              >
+                ⚡ Go to Home Page
+              </button>
+              <button
+                onClick={() => navigate('/dev-dashboard')}
+                style={{ padding: '12px 32px', fontSize: '14px', borderRadius: '12px', width: '100%', background: 'transparent', border: '1px solid var(--br)', color: 'var(--tx2)', cursor: 'pointer' }}
+              >
+                📊 Open Developer Dashboard
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={handleManualCheck}
+                disabled={checking}
+                className="btn-p"
+                style={{ padding: '14px 32px', fontSize: '16px', borderRadius: '12px', width: '100%', opacity: checking ? 0.7 : 1 }}
+              >
+                {checking ? 'Checking Status...' : '🔄 Sync Purchase Status'}
+              </button>
+              
+              {clerkUser?.id && (
+                <button
+                  onClick={handleManualActivate}
+                  disabled={checking || manualSuccess}
+                  style={{ 
+                    padding: '12px 32px', 
+                    fontSize: '14px', 
+                    borderRadius: '12px', 
+                    width: '100%', 
+                    background: 'rgba(34,211,238,0.1)', 
+                    border: '1px dashed var(--cy)', 
+                    color: 'var(--cy)', 
+                    cursor: 'pointer',
+                    marginTop: '8px'
+                  }}
+                >
+                  🚀 (Test Mode) Manually Activate Pro Instantly
+                </button>
+              )}
+            </>
+          )}
         </div>
 
         <p style={{ marginTop: '24px', fontSize: '12px', color: 'var(--tx3)' }}>
-          If Pro features don't appear immediately, please sign out and sign back in. A confirmation email will be sent to your registered address.
+          If you run into issues, please try logging out and logging back in to force-refresh your Clerk session.
         </p>
       </div>
     </div>

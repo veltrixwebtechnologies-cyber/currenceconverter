@@ -388,8 +388,41 @@ app.get('/api/diagnostics', async (req, res) => {
       REDIS_URL_PRESENT: redisUrlSet,
       VERCEL_ENV: process.env.VERCEL || 'not_vercel',
     },
-    redis: redisStatus
   });
+});
+
+app.get('/api/debug/make-pro', async (req, res) => {
+  try {
+    let clerkUserId = await getClerkUserId(req);
+    if (!clerkUserId && req.query.userId) {
+      clerkUserId = req.query.userId as string;
+    }
+
+    if (!clerkUserId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Clerk User ID required. Pass it via Authorization header or ?userId=user_...'
+      });
+    }
+
+    const email = (req.query.email as string) || 'debug-user@example.com';
+
+    const subscription = await db.upsertSubscription(
+      clerkUserId,
+      email,
+      'pro_lifetime',
+      'debug_manual_upgrade_' + Date.now()
+    );
+
+    res.json({
+      success: true,
+      message: `Successfully upgraded user ${clerkUserId} to pro_lifetime in Redis!`,
+      subscription
+    });
+  } catch (error: any) {
+    console.error('Failed to manually upgrade user:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 // ── Start Server ──────────────────────────────────────────────────────────────
