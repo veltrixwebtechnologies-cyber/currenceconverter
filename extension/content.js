@@ -23,7 +23,7 @@ function init() {
   });
 
   // Fetch live rates from the API through background fetch or directly
-  fetch('https://hoverconvert.vercel.app/api/rates')
+  fetch('https://www.currenceconverter.me/api/rates')
     .then(r => r.json())
     .then(data => {
       if (data && data.success && data.rates) {
@@ -49,7 +49,7 @@ chrome.storage.onChanged.addListener((changes) => {
 });
 
 // 1. Clerk Authentication Web App Sync
-if (window.location.hostname === 'hoverconvert.vercel.app' || window.location.hostname === 'localhost') {
+if (window.location.hostname.endsWith('currenceconverter.me') || window.location.hostname === 'hoverconvert.vercel.app' || window.location.hostname === 'localhost') {
   window.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'HOVERCONVERT_AUTH') {
       const { userId, email, token } = event.data;
@@ -270,7 +270,7 @@ function createLimitExceededTooltip(targetElement) {
 
   const upgradeBtn = tooltip.querySelector('#hc-tooltip-upgrade-btn');
   upgradeBtn.addEventListener('click', () => {
-    window.open('https://hoverconvert.vercel.app/pricing', '_blank');
+    window.open('https://www.currenceconverter.me/pricing', '_blank');
     removeTooltip();
   });
 

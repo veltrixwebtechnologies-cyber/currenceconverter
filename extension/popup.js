@@ -1,6 +1,6 @@
 // popup.js
 
-const DOMAIN = 'https://hoverconvert.vercel.app'; // Update this to your production domain or localhost during development
+const DOMAIN = 'https://www.currenceconverter.me'; // Update this to your production domain or localhost during development
 
 document.addEventListener('DOMContentLoaded', async () => {
   // Load UI state

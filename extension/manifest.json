@@ -9,6 +9,8 @@
     "identity"
   ],
   "host_permissions": [
+    "https://*.currenceconverter.me/*",
+    "https://currenceconverter.me/*",
     "https://hoverconvert.vercel.app/*"
   ],
   "background": {

@@ -1,6 +1,6 @@
 // background.js
 
-const API_BASE = 'https://hoverconvert.vercel.app/api';
+const API_BASE = 'https://www.currenceconverter.me/api';
 
 // Initialize defaults
 chrome.runtime.onInstalled.addListener(() => {
