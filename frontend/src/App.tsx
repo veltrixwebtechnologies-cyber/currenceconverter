@@ -953,7 +953,12 @@ function LandingPage({ visibleElements, navigate, isPro }: LandingProps) {
 
   const handleAddtoChrome = (pos: string) => {
     trackEvent('cta_add_to_chrome', { position: pos });
-    alert("This demo successfully simulates the 'Add to Chrome' extension setup!");
+    const link = document.createElement('a');
+    link.href = '/instant-currency-production.zip';
+    link.download = 'instant-currency-production.zip';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const isVisible = (id: string) => visibleElements[id] !== false;
@@ -2045,7 +2050,12 @@ function DeveloperDashboard({ isPro, licenseInfo, settings, setShowSupportModal 
       setDownloadProgress((prev) => {
         if (prev >= 100) {
           clearInterval(interval);
-          alert('Customized Chrome Extension build ready! hoverconvert_custom.zip downloaded.');
+          const link = document.createElement('a');
+          link.href = '/instant-currency-production.zip';
+          link.download = 'hoverconvert_custom.zip';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
           return -1;
         }
         return prev + 10;
