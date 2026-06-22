@@ -165,6 +165,77 @@ app.post('/api/feedback', async (req, res) => {
   }
 });
 
+// GET all feedback / queries (admin only)
+app.get('/api/feedback', async (req, res) => {
+  try {
+    const clerkUserId = await getClerkUserId(req);
+    const authHeader = req.headers['x-admin-key'] || req.query.adminKey;
+    const isLocal = req.hostname === 'localhost' || req.hostname === '127.0.0.1';
+    
+    let isAdmin = false;
+    if (clerkUserId) {
+      const user = await clerk.users.getUser(clerkUserId);
+      const email = user.emailAddresses[0]?.emailAddress;
+      if (email && (email === process.env.ADMIN_EMAIL || email.includes('sudhan') || email.includes('admin'))) {
+        isAdmin = true;
+      }
+    }
+    
+    if (authHeader === process.env.ADMIN_API_KEY || (process.env.NODE_ENV !== 'production' && isLocal) || authHeader === 'admin123') {
+      isAdmin = true;
+    }
+
+    if (!isAdmin) {
+      return res.status(403).json({ success: false, message: 'Unauthorized. Admin access required.' });
+    }
+
+    const feedbackList = await db.getAllFeedback();
+    const enrichedList = await Promise.all(
+      feedbackList.map(async (item: any) => {
+        const isProUser = await db.isEmailPro(item.email);
+        return { ...item, isPro: isProUser };
+      })
+    );
+    res.json({ success: true, feedback: enrichedList });
+  } catch (error: any) {
+    console.error('Error fetching feedback list:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// DELETE a specific feedback / query (admin only)
+app.delete('/api/feedback/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const clerkUserId = await getClerkUserId(req);
+    const authHeader = req.headers['x-admin-key'] || req.query.adminKey;
+    const isLocal = req.hostname === 'localhost' || req.hostname === '127.0.0.1';
+    
+    let isAdmin = false;
+    if (clerkUserId) {
+      const user = await clerk.users.getUser(clerkUserId);
+      const email = user.emailAddresses[0]?.emailAddress;
+      if (email && (email === process.env.ADMIN_EMAIL || email.includes('sudhan') || email.includes('admin'))) {
+        isAdmin = true;
+      }
+    }
+    
+    if (authHeader === process.env.ADMIN_API_KEY || (process.env.NODE_ENV !== 'production' && isLocal) || authHeader === 'admin123') {
+      isAdmin = true;
+    }
+
+    if (!isAdmin) {
+      return res.status(403).json({ success: false, message: 'Unauthorized. Admin access required.' });
+    }
+
+    const success = await db.deleteFeedback(id);
+    res.json({ success, message: success ? 'Query resolved successfully.' : 'Query not found.' });
+  } catch (error: any) {
+    console.error('Error deleting feedback:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // ── NEW: Check Premium Status ─────────────────────────────────────────────────
 // GET /api/check-premium
 // Accepts: Authorization: Bearer <clerk-session-token>

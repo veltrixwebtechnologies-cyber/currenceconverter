@@ -317,6 +317,66 @@ export const db = {
     }
   },
 
+  getAllFeedback: async (): Promise<Feedback[]> => {
+    if (useVercelKV) {
+      try {
+        const feedback = await kv.lrange<Feedback>('hc:feedback', 0, -1);
+        return feedback || [];
+      } catch (error) {
+        console.error('KV getAllFeedback error', error);
+        return [];
+      }
+    } else if (redisClient) {
+      try {
+        const list = await redisClient.lRange('hc:feedback', 0, -1);
+        return list ? list.map((item: string) => JSON.parse(item)) : [];
+      } catch (error) {
+        console.error('Redis getAllFeedback error', error);
+        return [];
+      }
+    } else {
+      const data = readDB();
+      return data.feedback || [];
+    }
+  },
+
+  deleteFeedback: async (id: string): Promise<boolean> => {
+    if (useVercelKV) {
+      try {
+        const feedback = await kv.lrange<Feedback>('hc:feedback', 0, -1);
+        const filtered = (feedback || []).filter(f => f.id !== id);
+        await kv.del('hc:feedback');
+        if (filtered.length > 0) {
+          await kv.rpush('hc:feedback', ...filtered);
+        }
+        return true;
+      } catch (error) {
+        console.error('KV deleteFeedback error', error);
+        return false;
+      }
+    } else if (redisClient) {
+      try {
+        const list = await redisClient.lRange('hc:feedback', 0, -1);
+        const feedback = list ? list.map((item: string) => JSON.parse(item)) : [];
+        const filtered = feedback.filter((f: any) => f.id !== id);
+        await redisClient.del('hc:feedback');
+        for (const item of filtered) {
+          await redisClient.rPush('hc:feedback', JSON.stringify(item));
+        }
+        return true;
+      } catch (error) {
+        console.error('Redis deleteFeedback error', error);
+        return false;
+      }
+    } else {
+      const data = readDB();
+      const initialLength = data.feedback.length;
+      data.feedback = data.feedback.filter(f => f.id !== id);
+      writeDB(data);
+      return data.feedback.length < initialLength;
+    }
+  },
+
   // ── Subscription methods (Clerk + Dodo) ──────────────────────────────────
 
   getSubscription: async (clerkUserId: string): Promise<UserSubscription | null> => {
@@ -397,5 +457,31 @@ export const db = {
     }
 
     return subscription;
+  },
+
+  isEmailPro: async (email: string): Promise<boolean> => {
+    if (!email) return false;
+    if (useVercelKV) {
+      try {
+        const subs = (await kv.hvals('hc:subscriptions')) as any[];
+        const found = subs.find((s: any) => s.email && s.email.toLowerCase() === email.toLowerCase() && s.premium);
+        return !!found;
+      } catch {
+        return false;
+      }
+    } else if (redisClient) {
+      try {
+        const vals = await redisClient.hVals('hc:subscriptions');
+        const subs = vals ? vals.map((v: string) => JSON.parse(v)) : [];
+        const found = subs.find((s: any) => s.email && s.email.toLowerCase() === email.toLowerCase() && s.premium);
+        return !!found;
+      } catch {
+        return false;
+      }
+    } else {
+      const data = readDB();
+      const found = Object.values(data.subscriptions || {}).find((s: any) => s.email && s.email.toLowerCase() === email.toLowerCase() && s.premium);
+      return !!found;
+    }
   }
 };

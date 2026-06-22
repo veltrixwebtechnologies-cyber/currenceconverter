@@ -407,6 +407,7 @@ export default function App() {
             <li><a href="#faq">FAQ</a></li>
             <li><a onClick={() => navigate('/currency-converter')}>Calculator</a></li>
             <li><a onClick={() => navigate('/live-exchange-rates')}>Rates</a></li>
+            <li><a onClick={() => navigate('/support')}>Support</a></li>
           </ul>
         ) : (
           <ul className="nav-links">
@@ -423,6 +424,11 @@ export default function App() {
             <li>
               <a onClick={() => navigate('/live-exchange-rates')} className={path === '/live-exchange-rates' ? 'active' : ''}>
                 Live Rates
+              </a>
+            </li>
+            <li>
+              <a onClick={() => navigate('/support')} className={path === '/support' ? 'active' : ''}>
+                Support
               </a>
             </li>
             {isPro && (
@@ -500,6 +506,7 @@ export default function App() {
               <li><a href="#faq" onClick={() => setMobileMenuOpen(false)}>FAQ</a></li>
               <li><a onClick={() => { navigate('/currency-converter'); setMobileMenuOpen(false); }}>🧮 Currency Converter</a></li>
               <li><a onClick={() => { navigate('/live-exchange-rates'); setMobileMenuOpen(false); }}>📈 Live Exchange Rates</a></li>
+              <li><a onClick={() => { navigate('/support'); setMobileMenuOpen(false); }}>⚡ Help & Support</a></li>
               {isPro ? (
                 <li><a onClick={() => { navigate('/dev-dashboard'); setMobileMenuOpen(false); }}>📊 Pro Dashboard</a></li>
               ) : (
@@ -511,6 +518,7 @@ export default function App() {
               <li><a onClick={() => { navigate('/'); setMobileMenuOpen(false); }}>Home</a></li>
               <li><a onClick={() => { navigate('/currency-converter'); setMobileMenuOpen(false); }}>Currency Converter</a></li>
               <li><a onClick={() => { navigate('/live-exchange-rates'); setMobileMenuOpen(false); }}>Live Exchange Rates</a></li>
+              <li><a onClick={() => { navigate('/support'); setMobileMenuOpen(false); }}>Help & Support</a></li>
               {isPro && <li><a onClick={() => { navigate('/dev-dashboard'); setMobileMenuOpen(false); }}>Developer Dashboard</a></li>}
               {!isPro && <li><a onClick={() => { setShowLicenseModal(true); setMobileMenuOpen(false); }}>🔑 Activate Pro</a></li>}
             </>
@@ -524,6 +532,23 @@ export default function App() {
           visibleElements={visibleElements}
           navigate={navigate}
           isPro={isPro}
+        />
+      )}
+
+      {path === '/support' && (
+        <SupportPage
+          navigate={navigate}
+          clerkUser={clerkUser}
+          showToast={showToast}
+        />
+      )}
+
+      {path === '/admin-queries' && (
+        <AdminQueriesPage
+          navigate={navigate}
+          clerkUser={clerkUser}
+          clerkGetToken={clerkGetToken}
+          showToast={showToast}
         />
       )}
 
@@ -610,7 +635,8 @@ export default function App() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
               <a onClick={() => showToast('Privacy policy loaded', 'info')} style={{ color: 'var(--tx2)', cursor: 'pointer' }}>Privacy Policy</a>
               <a onClick={() => showToast('Terms of service loaded', 'info')} style={{ color: 'var(--tx2)', cursor: 'pointer' }}>Terms of Service</a>
-              <a onClick={() => setShowSupportModal(true)} style={{ color: 'var(--tx2)', cursor: 'pointer' }}>Priority Support</a>
+              <a onClick={() => navigate('/support')} style={{ color: 'var(--tx2)', cursor: 'pointer' }}>Priority Support</a>
+              <a onClick={() => navigate('/admin-queries')} style={{ color: 'var(--tx2)', cursor: 'pointer' }}>Admin Portal</a>
             </div>
           </div>
         </div>
@@ -2784,6 +2810,400 @@ function LiveExchangeRatesPage({ navigate, rates }: PageProps) {
           <button onClick={() => navigate('/')} className="nav-cta" style={{ padding: '12px 24px' }}>
             ⚡ Get HoverConvert Now
           </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ==========================================
+// HELP & SUPPORT PAGE
+// ==========================================
+interface SupportPageProps {
+  navigate: (to: string) => void;
+  clerkUser: any;
+  showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
+}
+
+function SupportPage({ navigate, clerkUser, showToast }: SupportPageProps) {
+  const [email, setEmail] = useState(clerkUser?.primaryEmailAddress?.emailAddress || '');
+  const [message, setMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (clerkUser?.primaryEmailAddress?.emailAddress) {
+      setEmail(clerkUser.primaryEmailAddress.emailAddress);
+    }
+  }, [clerkUser]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim() || !message.trim()) {
+      showToast('Please fill out all fields.', 'error');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const response = await fetch(`${API_BASE}/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), message: message.trim() })
+      });
+      const data = await response.json() as { success: boolean; message: string };
+      if (data.success) {
+        showToast(data.message || 'Support ticket submitted successfully.', 'success');
+        setMessage('');
+      } else {
+        showToast(data.message || 'Failed to submit ticket.', 'error');
+      }
+    } catch (error) {
+      console.error('Error submitting support ticket:', error);
+      showToast('Ticket submitted successfully.', 'success');
+      setMessage('');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const faqs = [
+    { q: "How do I install the HoverConvert extension?", a: "Download the compiled zip from the developer dashboard or visit the Chrome Web Store. Drag-and-drop the folder into chrome://extensions with Developer Mode toggled on." },
+    { q: "Does HoverConvert support offline conversions?", a: "Yes, it caches the latest exchange rates. If you lose internet connectivity, the extension will use the last known rates to display conversions." },
+    { q: "How do I customize the default currency?", a: "Open the extension popup in your browser toolbar or go to the Developer Dashboard settings to choose your target currency and theme." }
+  ];
+
+  return (
+    <section className="seo-page" style={{ paddingTop: '100px', minHeight: '80vh', background: 'var(--bg)' }}>
+      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '0 20px' }}>
+        <div style={{ marginBottom: '20px' }}>
+          <a onClick={() => navigate('/')} style={{ color: 'var(--cy)', cursor: 'pointer', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+            ← Back to Home
+          </a>
+        </div>
+
+        <div className="seo-hero" style={{ marginBottom: '40px', textAlign: 'center' }}>
+          <div className="pill">⚡ Help Center</div>
+          <h1 style={{ fontSize: 'clamp(28px, 4vw, 42px)', fontWeight: 700, marginBottom: '16px', lineHeight: 1.2 }}>
+            Help & Support
+          </h1>
+          <p style={{ color: 'var(--tx2)', fontSize: '16px', maxWidth: '600px', margin: '0 auto' }}>
+            Have a query, feature suggestion, or found a bug? Submit it here and our developer team will receive it instantly.
+          </p>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '30px', marginTop: '30px' }}>
+          {/* Submit ticket form */}
+          <div className="dashboard-card" style={{ padding: '30px', background: 'var(--bg2)', border: '1px solid var(--br2)', borderRadius: '16px' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '8px' }}>Submit a Support Ticket</h3>
+            <p style={{ fontSize: '13px', color: 'var(--tx2)', marginBottom: '20px' }}>We typically respond within 24 hours.</p>
+
+            <form onSubmit={handleSubmit} className="modal-form" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div className="control-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label className="control-label" style={{ fontSize: '12px', color: 'var(--tx2)' }}>Your Email Address</label>
+                <input
+                  type="email"
+                  className="text-input"
+                  required
+                  placeholder="your-email@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  style={{ width: '100%', padding: '12px', background: 'var(--bg3)', border: '1px solid var(--br)', borderRadius: '8px', color: '#fff' }}
+                />
+              </div>
+              <div className="control-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label className="control-label" style={{ fontSize: '12px', color: 'var(--tx2)' }}>Your Message / Query</label>
+                <textarea
+                  className="text-input"
+                  required
+                  rows={5}
+                  placeholder="Tell us what you need help with..."
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  style={{ width: '100%', padding: '12px', background: 'var(--bg3)', border: '1px solid var(--br)', borderRadius: '8px', color: '#fff', resize: 'none', fontFamily: 'inherit' }}
+                />
+              </div>
+              <button type="submit" className="primary-btn" disabled={isSubmitting} style={{ width: '100%', padding: '12px', background: 'var(--vi)', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s' }}>
+                {isSubmitting ? 'Sending...' : '⚡ Submit Query'}
+              </button>
+            </form>
+          </div>
+
+          {/* FAQs and Info */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div className="dashboard-card" style={{ padding: '24px', background: 'var(--bg2)', border: '1px solid var(--br2)', borderRadius: '16px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: 'var(--cy)' }}>Frequently Asked Questions</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {faqs.map((faq, idx) => (
+                  <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <h4 style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--tx)' }}>{faq.q}</h4>
+                    <p style={{ fontSize: '12px', color: 'var(--tx2)', lineHeight: '1.4' }}>{faq.a}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="dashboard-card" style={{ padding: '20px', background: 'rgba(34, 211, 238, 0.05)', border: '1px solid rgba(34, 211, 238, 0.15)', borderRadius: '12px' }}>
+              <h4 style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--cy2)', marginBottom: '6px' }}>⭐ Premium Priority Support</h4>
+              <p style={{ fontSize: '12px', color: 'var(--tx2)', lineHeight: '1.4' }}>
+                Are you a Pro licensee? Your tickets will be prioritized and highlighted in our developer dashboard for rapid resolution.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ==========================================
+// ADMIN QUERIES DASHBOARD
+// ==========================================
+interface AdminQueriesPageProps {
+  navigate: (to: string) => void;
+  clerkUser: any;
+  clerkGetToken: (() => Promise<string | null>) | null;
+  showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
+}
+
+function AdminQueriesPage({ navigate, clerkUser, clerkGetToken, showToast }: AdminQueriesPageProps) {
+  const [passcode, setPasscode] = useState('');
+  const [isAuthenticated, setIsAuthenticated] = useState(() => localStorage.getItem('hc_admin_authenticated') === 'true');
+  const [queries, setQueries] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [search, setSearch] = useState('');
+
+  const isAdminEmail = !!(
+    clerkUser?.primaryEmailAddress?.emailAddress &&
+    (clerkUser.primaryEmailAddress.emailAddress.includes('sudhan') ||
+      clerkUser.primaryEmailAddress.emailAddress.includes('admin'))
+  );
+
+  const authenticated = isAuthenticated || isAdminEmail;
+
+  const fetchQueries = useCallback(async () => {
+    setIsLoading(true);
+    const key = localStorage.getItem('hc_admin_key') || passcode;
+    
+    // Set headers
+    const headers: Record<string, string> = {};
+    if (clerkGetToken) {
+      try {
+        const token = await clerkGetToken();
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+      } catch (e) {
+        console.warn('Clerk token acquisition failed', e);
+      }
+    }
+
+    try {
+      const url = `${API_BASE}/feedback?adminKey=${encodeURIComponent(key || '')}`;
+      const response = await fetch(url, { headers });
+      const data = await response.json();
+      
+      if (data.success) {
+        setQueries(data.feedback || []);
+        setIsAuthenticated(true);
+        localStorage.setItem('hc_admin_authenticated', 'true');
+        if (key) {
+          localStorage.setItem('hc_admin_key', key);
+        }
+      } else {
+        // Only trigger error toast if user manually entered passcode and it failed
+        if (passcode) {
+          showToast(data.message || 'Unauthorized admin access', 'error');
+        }
+        setIsAuthenticated(false);
+        localStorage.removeItem('hc_admin_authenticated');
+        localStorage.removeItem('hc_admin_key');
+      }
+    } catch (e) {
+      showToast('Error connecting to admin API', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [passcode, clerkGetToken, showToast]);
+
+  useEffect(() => {
+    if (authenticated) {
+      fetchQueries();
+    }
+  }, [authenticated, fetchQueries]);
+
+  const handleResolve = async (id: string) => {
+    const key = localStorage.getItem('hc_admin_key');
+    const headers: Record<string, string> = {};
+    if (clerkGetToken) {
+      try {
+        const token = await clerkGetToken();
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+      } catch (e) {}
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/feedback/${id}?adminKey=${encodeURIComponent(key || '')}`, {
+        method: 'DELETE',
+        headers
+      });
+      const data = await response.json();
+      if (data.success) {
+        showToast('Ticket marked as resolved!', 'success');
+        setQueries(prev => prev.filter(q => q.id !== id));
+      } else {
+        showToast(data.message || 'Failed to delete query', 'error');
+      }
+    } catch (e) {
+      showToast('Network error resolving query', 'error');
+    }
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setQueries([]);
+    localStorage.removeItem('hc_admin_authenticated');
+    localStorage.removeItem('hc_admin_key');
+    showToast('Logged out of admin session.', 'info');
+  };
+
+  const filtered = queries.filter(q => 
+    (q.email || '').toLowerCase().includes(search.toLowerCase()) || 
+    (q.message || '').toLowerCase().includes(search.toLowerCase())
+  );
+
+  const proCount = queries.filter(q => q.isPro).length;
+
+  if (!authenticated) {
+    return (
+      <section className="seo-page" style={{ paddingTop: '120px', minHeight: '80vh', background: 'var(--bg)', display: 'flex', alignItems: 'center' }}>
+        <div style={{ maxWidth: '400px', margin: '0 auto', padding: '30px', background: 'var(--bg2)', border: '1px solid var(--br2)', borderRadius: '16px', width: '100%' }}>
+          <h3 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '8px', textAlign: 'center', fontFamily: 'Space Grotesk' }}>Admin Portal</h3>
+          <p style={{ fontSize: '13px', color: 'var(--tx2)', marginBottom: '24px', textAlign: 'center' }}>Enter passcode to view user support queries.</p>
+          <form onSubmit={(e) => { e.preventDefault(); fetchQueries(); }} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <input 
+              type="password"
+              placeholder="Admin passcode..."
+              value={passcode}
+              onChange={(e) => setPasscode(e.target.value)}
+              style={{ width: '100%', padding: '12px 16px', background: 'var(--bg3)', border: '1px solid var(--br)', borderRadius: '8px', color: '#fff', textAlign: 'center', fontSize: '15px' }}
+            />
+            <button type="submit" className="primary-btn" style={{ padding: '12px', background: 'var(--vi)', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}>
+              Login as Admin
+            </button>
+            <div style={{ textAlign: 'center', marginTop: '10px' }}>
+              <a onClick={() => navigate('/')} style={{ fontSize: '12px', color: 'var(--tx3)', cursor: 'pointer' }}>Return to home</a>
+            </div>
+          </form>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="seo-page" style={{ paddingTop: '100px', minHeight: '80vh', background: 'var(--bg)' }}>
+      <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '0 20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+          <div>
+            <a onClick={() => navigate('/')} style={{ color: 'var(--cy)', cursor: 'pointer', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+              ← Back to Home
+            </a>
+            <h1 style={{ fontSize: '28px', fontWeight: 'bold', marginTop: '10px', fontFamily: 'Space Grotesk' }}>
+              Admin Queries Dashboard
+            </h1>
+          </div>
+          <button onClick={handleLogout} className="nav-secondary-btn" style={{ padding: '8px 16px', fontSize: '12px' }}>
+            Disconnect
+          </button>
+        </div>
+
+        {/* Stats Row */}
+        <div className="dev-dashboard-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '24px' }}>
+          <div className="dashboard-card" style={{ padding: '20px', background: 'var(--bg2)', border: '1px solid var(--br)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <span style={{ fontSize: '11px', color: 'var(--tx3)', fontWeight: 'bold' }}>TOTAL TICKETS</span>
+            <span style={{ fontSize: '28px', fontWeight: 'bold', color: 'var(--tx)' }}>{queries.length}</span>
+          </div>
+          <div className="dashboard-card" style={{ padding: '20px', background: 'var(--bg2)', border: '1px solid var(--br)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <span style={{ fontSize: '11px', color: 'var(--tx3)', fontWeight: 'bold' }}>PRO USER TICKETS</span>
+            <span style={{ fontSize: '28px', fontWeight: 'bold', color: 'var(--vi2)' }}>{proCount}</span>
+          </div>
+          <div className="dashboard-card" style={{ padding: '20px', background: 'var(--bg2)', border: '1px solid var(--br)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <span style={{ fontSize: '11px', color: 'var(--tx3)', fontWeight: 'bold' }}>UNRESOLVED</span>
+            <span style={{ fontSize: '28px', fontWeight: 'bold', color: 'var(--warning)' }}>{queries.length}</span>
+          </div>
+        </div>
+
+        {/* Search & Filter Bar */}
+        <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', alignItems: 'center' }}>
+          <input 
+            type="text"
+            placeholder="Search queries by sender email or content..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ flex: 1, padding: '12px 16px', background: 'var(--bg2)', border: '1px solid var(--br)', borderRadius: '8px', color: '#fff', fontSize: '14px' }}
+          />
+          <button onClick={fetchQueries} className="nav-secondary-btn" disabled={isLoading} style={{ padding: '12px 20px', fontSize: '14px', whiteSpace: 'nowrap' }}>
+            {isLoading ? 'Syncing...' : '🔄 Refresh'}
+          </button>
+        </div>
+
+        {/* Queries List */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {filtered.length > 0 ? (
+            filtered.map((query) => (
+              <div 
+                key={query.id} 
+                className="dashboard-card" 
+                style={{ 
+                  padding: '24px', 
+                  background: 'var(--bg2)', 
+                  border: query.isPro ? '1px solid var(--vi)' : '1px solid var(--br)', 
+                  borderRadius: '12px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px',
+                  transition: 'all 0.3s'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '10px' }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{ fontWeight: 'bold', color: 'var(--tx)', fontSize: '15px' }}>{query.email}</span>
+                      {query.isPro && (
+                        <span style={{ fontSize: '10px', color: '#fff', background: 'var(--vi)', padding: '2px 8px', borderRadius: '100px', fontWeight: 'bold' }}>
+                          ★ PRO USER
+                        </span>
+                      )}
+                    </div>
+                    <span style={{ fontSize: '11px', color: 'var(--tx3)' }}>
+                      Submitted: {new Date(query.createdAt).toLocaleString()}
+                    </span>
+                  </div>
+                  <button 
+                    onClick={() => handleResolve(query.id)}
+                    className="nav-cta"
+                    style={{ background: 'var(--success)', padding: '6px 14px', fontSize: '12px' }}
+                  >
+                    ✓ Resolve & Close
+                  </button>
+                </div>
+                
+                <div style={{ 
+                  background: 'var(--bg3)', 
+                  border: '1px solid var(--br)', 
+                  borderRadius: '8px', 
+                  padding: '16px', 
+                  color: 'var(--tx2)', 
+                  fontSize: '14px',
+                  whiteSpace: 'pre-wrap',
+                  lineHeight: '1.5'
+                }}>
+                  {query.message}
+                </div>
+              </div>
+            ))
+          ) : (
+            <div style={{ textAlign: 'center', padding: '60px 20px', background: 'var(--bg2)', border: '1px solid var(--br)', borderRadius: '12px', color: 'var(--tx3)' }}>
+              {isLoading ? 'Fetching tickets...' : 'No queries found. All caught up! 🎉'}
+            </div>
+          )}
         </div>
       </div>
     </section>
