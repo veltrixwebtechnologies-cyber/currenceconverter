@@ -139,28 +139,63 @@ export default function App() {
 
   // Establish stable user ID & load settings
   useEffect(() => {
-    let storedUserId = localStorage.getItem('hc_user_id');
-    if (!storedUserId) {
-      storedUserId = 'user_' + Math.random().toString(36).substring(2, 11);
-      localStorage.setItem('hc_user_id', storedUserId);
-    }
-    setUserId(storedUserId);
-
     // Fetch exchange rates from backend
     fetchRates();
 
-    // Check if license key already activated (legacy)
-    const storedLicense = localStorage.getItem('hc_license_info');
-    if (storedLicense) {
-      try {
-        const parsed = JSON.parse(storedLicense);
-        setLicenseInfo(parsed);
-        setIsPro(true);
-      } catch (e) {
-        localStorage.removeItem('hc_license_info');
-      }
+    // Store extension ID if present in query parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const extId = urlParams.get('extensionId');
+    if (extId) {
+      localStorage.setItem('hc_extension_id', extId);
+      // Clean up the URL search params so the extensionId isn't hanging around
+      const newUrl = window.location.pathname + window.location.search.replace(/[?&]extensionId=[^&]+/, '').replace(/^&/, '?');
+      window.history.replaceState({}, document.title, newUrl);
     }
+
+    // Check and validate legacy license key securely on backend
+    const checkLegacyLicense = async () => {
+      const storedLicense = localStorage.getItem('hc_license_info');
+      if (storedLicense) {
+        try {
+          const parsed = JSON.parse(storedLicense);
+          if (parsed && parsed.licenseKey) {
+            const res = await fetch(`${API_BASE}/license/validate`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ licenseKey: parsed.licenseKey })
+            });
+            const data = await res.json();
+            if (res.ok && data.success && data.license?.status === 'active') {
+              setLicenseInfo(data.license);
+              setIsPro(true);
+            } else {
+              localStorage.removeItem('hc_license_info');
+              setLicenseInfo(null);
+            }
+          }
+        } catch (e) {
+          localStorage.removeItem('hc_license_info');
+          setLicenseInfo(null);
+        }
+      }
+    };
+    checkLegacyLicense();
   }, []);
+
+  // Dynamically switch userId between Clerk ID (if logged in) and Guest ID (if logged out)
+  useEffect(() => {
+    if (!clerkIsLoaded) return;
+    if (clerkIsSignedIn && clerkUser) {
+      setUserId(clerkUser.id);
+    } else {
+      let storedUserId = localStorage.getItem('hc_user_id');
+      if (!storedUserId) {
+        storedUserId = 'user_' + Math.random().toString(36).substring(2, 11);
+        localStorage.setItem('hc_user_id', storedUserId);
+      }
+      setUserId(storedUserId);
+    }
+  }, [clerkIsLoaded, clerkIsSignedIn, clerkUser]);
 
   // Check premium status via Clerk auth when user loads
   const checkPremium = useCallback(async () => {
@@ -190,13 +225,15 @@ export default function App() {
       return premiumStatus;
     } catch (err) {
       console.warn('Premium check failed, defaulting to free tier:', err);
-      // Fallback to cached status on network failure
+      // Fallback to cached status on network failure with 24h TTL
       const cached = localStorage.getItem('hc_premium_status');
       if (cached) {
         try {
           const parsed = JSON.parse(cached);
-          setIsPro(!!parsed.premium);
-          return !!parsed.premium;
+          if (parsed && typeof parsed.timestamp === 'number' && Date.now() - parsed.timestamp < 24 * 60 * 60 * 1000) {
+            setIsPro(!!parsed.premium);
+            return !!parsed.premium;
+          }
         } catch (_) {}
       }
       setIsPro(false);
@@ -212,24 +249,64 @@ export default function App() {
   useEffect(() => {
     if (!clerkIsLoaded) return;
     const syncAuthWithExtension = async () => {
-      if (clerkIsSignedIn && clerkGetToken && clerkUser) {
-        try {
+      const targetExtId = localStorage.getItem('hc_extension_id');
+      if (!targetExtId) return;
+
+      try {
+        if (clerkIsSignedIn && clerkGetToken && clerkUser) {
           const token = await clerkGetToken();
           if (token) {
-            window.postMessage({
-              type: 'HOVERCONVERT_AUTH',
-              userId: clerkUser.id,
-              email: clerkUser.primaryEmailAddress?.emailAddress,
-              token: token
-            }, '*');
+            if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+              chrome.runtime.sendMessage(
+                targetExtId,
+                {
+                  type: 'INSTANT_CURRENCY_CLERK_SESSION',
+                  token: token,
+                  user: {
+                    id: clerkUser.id,
+                    email: clerkUser.primaryEmailAddress?.emailAddress
+                  },
+                  subscription: {
+                    active: isPro,
+                    status: isPro ? 'active' : 'inactive',
+                    plan_type: isPro ? 'pro_lifetime' : 'free'
+                  }
+                },
+                (response: any) => {
+                  if (chrome.runtime.lastError) {
+                    console.warn('Extension sync failed (expected if not installed/configured):', chrome.runtime.lastError.message);
+                  } else {
+                    console.log('Synced session to Chrome Extension.', response);
+                  }
+                }
+              );
+            }
           }
-        } catch (err) {
-          console.error('Failed to sync auth with extension:', err);
+        } else {
+          // Clear session in extension on logout
+          if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+            chrome.runtime.sendMessage(
+              targetExtId,
+              {
+                type: 'INSTANT_CURRENCY_CLERK_SESSION',
+                token: null,
+                user: null,
+                subscription: null
+              },
+              () => {
+                if (chrome.runtime.lastError) {
+                  // Ignore
+                }
+              }
+            );
+          }
         }
+      } catch (err) {
+        console.error('Failed to sync auth with extension:', err);
       }
     };
     syncAuthWithExtension();
-  }, [clerkIsLoaded, clerkIsSignedIn, clerkUser]);
+  }, [clerkIsLoaded, clerkIsSignedIn, clerkUser, isPro]);
 
 
   // Fetch settings once userId is loaded
@@ -280,6 +357,15 @@ export default function App() {
       setToast((prev) => ({ ...prev, visible: false }));
     }, 4000);
   };
+
+  // Redirect unauthenticated users from protected pages (e.g. dev dashboard)
+  useEffect(() => {
+    if (clerkIsLoaded && !clerkIsSignedIn && path === '/dev-dashboard') {
+      showToast('Authentication required. Please sign in.', 'error');
+      navigate('/');
+    }
+  }, [clerkIsLoaded, clerkIsSignedIn, path]);
+
 
   const fetchRates = async () => {
     try {

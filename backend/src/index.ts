@@ -95,11 +95,26 @@ app.get('/api/rates', async (req, res) => {
   }
 });
 
+// ── Helper: Verify user access to settings ────────────────────────────────────
+
+async function verifyUserAccess(req: express.Request, userIdFromParam: string): Promise<boolean> {
+  const tokenClerkUserId = await getClerkUserId(req);
+  if (tokenClerkUserId) {
+    return tokenClerkUserId === userIdFromParam;
+  }
+  // Allow if it matches the guest format: user_ followed by 9 alphanumeric characters
+  return /^user_[a-z0-9]{9}$/.test(userIdFromParam);
+}
+
 // ── Settings endpoints ────────────────────────────────────────────────────────
 
 app.get('/api/settings/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
+    const hasAccess = await verifyUserAccess(req, userId);
+    if (!hasAccess) {
+      return res.status(403).json({ success: false, message: 'Forbidden. Access to settings denied.' });
+    }
     const settings = await db.getSettings(userId);
     res.json({ success: true, settings });
   } catch (error: any) {
@@ -110,6 +125,10 @@ app.get('/api/settings/:userId', async (req, res) => {
 app.post('/api/settings/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
+    const hasAccess = await verifyUserAccess(req, userId);
+    if (!hasAccess) {
+      return res.status(403).json({ success: false, message: 'Forbidden. Access to settings denied.' });
+    }
     const updates = req.body;
     const settings = await db.updateSettings(userId, updates);
     res.json({ success: true, settings });
@@ -117,6 +136,108 @@ app.post('/api/settings/:userId', async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
+// ── Extension compatibility endpoints ──────────────────────────────────────────
+
+app.get('/api/me', async (req, res) => {
+  try {
+    const clerkUserId = await getClerkUserId(req);
+    if (!clerkUserId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const user = await clerk.users.getUser(clerkUserId);
+    const email = user.emailAddresses[0]?.emailAddress || '';
+    res.json({
+      user: {
+        id: clerkUserId,
+        email: email
+      }
+    });
+  } catch (error: any) {
+    console.error('Error fetching user info:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/subscription/status', async (req, res) => {
+  try {
+    const clerkUserId = await getClerkUserId(req);
+    if (!clerkUserId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const subscription = await db.getSubscription(clerkUserId);
+    const active = !!(subscription && subscription.premium);
+    res.json({
+      active,
+      status: active ? 'active' : 'inactive',
+      plan_type: subscription?.plan || 'free',
+      expires_at: null
+    });
+  } catch (error: any) {
+    console.error('Error fetching subscription status:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/subscription/create-checkout', async (req, res) => {
+  const DODO_API_KEY = process.env.DODO_API_KEY;
+  const DODO_PRODUCT_ID = process.env.DODO_PRODUCT_ID;
+  const APP_URL = process.env.APP_URL || 'https://hoverconvert.vercel.app';
+
+  if (!DODO_API_KEY || !DODO_PRODUCT_ID) {
+    console.error('DODO_API_KEY or DODO_PRODUCT_ID not set');
+    return res.status(500).json({ error: 'Payment not configured' });
+  }
+
+  try {
+    const clerkUserId = await getClerkUserId(req);
+    if (!clerkUserId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const user = await clerk.users.getUser(clerkUserId);
+    const email = user.emailAddresses[0]?.emailAddress;
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    const dodo = new DodoPayments({
+      bearerToken: DODO_API_KEY,
+      environment: DODO_API_KEY.includes('test') || DODO_API_KEY.startsWith('E-') ? 'test_mode' : 'live_mode'
+    });
+
+    const session = await dodo.checkoutSessions.create({
+      product_cart: [
+        {
+          product_id: DODO_PRODUCT_ID,
+          quantity: 1
+        }
+      ],
+      customer: {
+        email: email,
+        name: email.split('@')[0]
+      },
+      metadata: {
+        clerkUserId: clerkUserId,
+        email: email
+      },
+      return_url: `${APP_URL}/payment-success`,
+      cancel_url: `${APP_URL}/pricing`
+    });
+
+    const checkoutUrl = session.checkout_url;
+
+    if (!checkoutUrl) {
+      return res.status(500).json({ error: 'No checkout URL returned' });
+    }
+
+    res.json({ checkout_url: checkoutUrl });
+  } catch (error: any) {
+    console.error('Error creating checkout session:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 
 // ── License validation & activation (legacy) ─────────────────────────────────
 
