@@ -286,27 +286,39 @@ app.post('/api/feedback', async (req, res) => {
   }
 });
 
-// GET all feedback / queries (admin only)
-app.get('/api/feedback', async (req, res) => {
+// Helper: Secure Admin Access Verification
+async function isAdminRequest(req: express.Request): Promise<boolean> {
+  const authHeader = req.headers['x-admin-key'] || req.query.adminKey;
+  
+  if (process.env.ADMIN_API_KEY && authHeader === process.env.ADMIN_API_KEY) {
+    return true;
+  }
+  
   try {
     const clerkUserId = await getClerkUserId(req);
-    const authHeader = req.headers['x-admin-key'] || req.query.adminKey;
-    const isLocal = req.hostname === 'localhost' || req.hostname === '127.0.0.1';
-    
-    let isAdmin = false;
     if (clerkUserId) {
       const user = await clerk.users.getUser(clerkUserId);
       const email = user.emailAddresses[0]?.emailAddress;
-      if (email && (email === process.env.ADMIN_EMAIL || email.includes('sudhan') || email.includes('admin'))) {
-        isAdmin = true;
+      if (email && process.env.ADMIN_EMAIL && email === process.env.ADMIN_EMAIL) {
+        return true;
       }
     }
-    
-    if (authHeader === process.env.ADMIN_API_KEY || (process.env.NODE_ENV !== 'production' && isLocal) || authHeader === 'admin123') {
-      isAdmin = true;
-    }
+  } catch (error) {
+    console.error('Error verifying Clerk admin status:', error);
+  }
+  
+  const isLocal = req.hostname === 'localhost' || req.hostname === '127.0.0.1';
+  if (process.env.NODE_ENV !== 'production' && isLocal) {
+    return true;
+  }
+  
+  return false;
+}
 
-    if (!isAdmin) {
+// GET all feedback / queries (admin only)
+app.get('/api/feedback', async (req, res) => {
+  try {
+    if (!(await isAdminRequest(req))) {
       return res.status(403).json({ success: false, message: 'Unauthorized. Admin access required.' });
     }
 
@@ -328,24 +340,7 @@ app.get('/api/feedback', async (req, res) => {
 app.delete('/api/feedback/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const clerkUserId = await getClerkUserId(req);
-    const authHeader = req.headers['x-admin-key'] || req.query.adminKey;
-    const isLocal = req.hostname === 'localhost' || req.hostname === '127.0.0.1';
-    
-    let isAdmin = false;
-    if (clerkUserId) {
-      const user = await clerk.users.getUser(clerkUserId);
-      const email = user.emailAddresses[0]?.emailAddress;
-      if (email && (email === process.env.ADMIN_EMAIL || email.includes('sudhan') || email.includes('admin'))) {
-        isAdmin = true;
-      }
-    }
-    
-    if (authHeader === process.env.ADMIN_API_KEY || (process.env.NODE_ENV !== 'production' && isLocal) || authHeader === 'admin123') {
-      isAdmin = true;
-    }
-
-    if (!isAdmin) {
+    if (!(await isAdminRequest(req))) {
       return res.status(403).json({ success: false, message: 'Unauthorized. Admin access required.' });
     }
 
@@ -566,6 +561,9 @@ app.get('/api/health', (req, res) => {
 });
 
 app.get('/api/diagnostics', async (req, res) => {
+  if (!(await isAdminRequest(req))) {
+    return res.status(403).json({ success: false, message: 'Forbidden' });
+  }
   const redisUrlSet = !!process.env.REDIS_URL;
   const redisStatus = await db.getRedisStatus();
 
@@ -585,6 +583,9 @@ app.get('/api/diagnostics', async (req, res) => {
 
 app.get('/api/debug/make-pro', async (req, res) => {
   try {
+    if (!(await isAdminRequest(req))) {
+      return res.status(403).json({ success: false, message: 'Unauthorized. Admin access required for debug endpoints.' });
+    }
     let clerkUserId = await getClerkUserId(req);
     if (!clerkUserId && req.query.userId) {
       clerkUserId = req.query.userId as string;
