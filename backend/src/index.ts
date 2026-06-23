@@ -222,7 +222,7 @@ app.post('/api/subscription/create-checkout', async (req, res) => {
         email: email
       },
       return_url: `${APP_URL}/payment-success`,
-      cancel_url: `${APP_URL}/pricing`
+      cancel_url: `${APP_URL}/payment-failed`
     });
 
     const checkoutUrl = session.checkout_url;
@@ -443,6 +443,13 @@ app.post('/api/webhooks/dodo', async (req, res) => {
     'order.paid'
   ].includes(eventType);
 
+  const isRevokeEvent = [
+    'subscription.cancelled',
+    'subscription.revoked',
+    'subscription.expired',
+    'payment.refunded'
+  ].includes(eventType);
+
   if (isSuccessEvent) {
     try {
       // Extract metadata from the Dodo payload
@@ -479,6 +486,39 @@ app.post('/api/webhooks/dodo', async (req, res) => {
 
       console.log(`✅ User ${clerkUserId} upgraded to pro_lifetime`);
       return res.status(200).json({ received: true, upgraded: true });
+    } catch (error: any) {
+      console.error('Webhook processing error:', error);
+      return res.status(500).json({ error: 'Failed to process webhook' });
+    }
+  }
+
+  if (isRevokeEvent) {
+    try {
+      const metadata = payload.data?.metadata || payload.metadata || {};
+      const customer = payload.data?.customer || payload.customer || {};
+
+      const clerkUserId: string | undefined = metadata.clerkUserId || metadata.clerk_user_id;
+      const email: string | undefined =
+        metadata.email ||
+        customer.email ||
+        payload.data?.payment_link?.customer?.email;
+
+      if (!clerkUserId) {
+        console.error('Webhook: clerkUserId missing from metadata in revoke event', JSON.stringify(payload, null, 2));
+        return res.status(200).json({ received: true, warning: 'clerkUserId missing from metadata' });
+      }
+
+      console.log(`Revoking/downgrading pro for clerkUserId=${clerkUserId}, email=${email}`);
+
+      await db.upsertSubscription(
+        clerkUserId,
+        email || '',
+        'free',
+        null
+      );
+
+      console.log(`❌ User ${clerkUserId} subscription status set to free`);
+      return res.status(200).json({ received: true, revoked: true });
     } catch (error: any) {
       console.error('Webhook processing error:', error);
       return res.status(500).json({ error: 'Failed to process webhook' });
@@ -540,7 +580,7 @@ app.post('/api/create-checkout', async (req, res) => {
         email: email
       },
       return_url: `${APP_URL}/payment-success`,
-      cancel_url: `${APP_URL}/pricing`
+      cancel_url: `${APP_URL}/payment-failed`
     });
 
     const checkoutUrl = session.checkout_url;
