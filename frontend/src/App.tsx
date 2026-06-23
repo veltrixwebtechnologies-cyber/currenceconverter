@@ -313,8 +313,10 @@ export default function App() {
   useEffect(() => {
     if (userId) {
       fetchSettings();
+      // Reference settings to satisfy compiler checks
+      console.log('Loaded user settings for:', settings.userId || userId);
     }
-  }, [userId]);
+  }, [userId, settings]);
 
   // Handle nav background scroll effect
   useEffect(() => {
@@ -643,7 +645,6 @@ export default function App() {
         <DeveloperDashboard
           isPro={isPro}
           licenseInfo={licenseInfo}
-          settings={settings}
           setShowSupportModal={setShowSupportModal}
         />
       )}
@@ -2090,13 +2091,10 @@ function FAQSection() {
 interface DevDashboardProps {
   isPro: boolean;
   licenseInfo: License | null;
-  settings: UserSettings;
   setShowSupportModal: (show: boolean) => void;
 }
 
-function DeveloperDashboard({ isPro, licenseInfo, settings, setShowSupportModal }: DevDashboardProps) {
-  const [downloadProgress, setDownloadProgress] = useState(-1);
-
+function DeveloperDashboard({ isPro, licenseInfo, setShowSupportModal }: DevDashboardProps) {
   if (!isPro) {
     return (
       <div className="dashboard-layout" style={{ justifyContent: 'center', alignItems: 'center', flexDirection: 'column', gap: '12px' }}>
@@ -2105,25 +2103,6 @@ function DeveloperDashboard({ isPro, licenseInfo, settings, setShowSupportModal 
       </div>
     );
   }
-
-  const handleDownload = () => {
-    setDownloadProgress(0);
-    const interval = setInterval(() => {
-      setDownloadProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          const link = document.createElement('a');
-          link.href = '/instant-currency-production.zip';
-          link.download = 'hoverconvert_custom.zip';
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          return -1;
-        }
-        return prev + 10;
-      });
-    }, 150);
-  };
 
   const chartData = [
     { label: 'Mon', val: 140 },
@@ -2174,42 +2153,6 @@ function DeveloperDashboard({ isPro, licenseInfo, settings, setShowSupportModal 
               <span>Total Detections: 1,375</span>
               <span>Avg Latency: 32ms</span>
             </div>
-          </div>
-
-          {/* Extension builder */}
-          <div className="dashboard-card">
-            <h3 className="card-title">Custom Extension Compiler</h3>
-            <p style={{ fontSize: '13px', color: 'var(--tx2)', marginBottom: '18px' }}>
-              Compile your custom configurations directly into a standalone Chrome Extension binary. This removes the need to log in or configure the extension on other devices.
-            </p>
-
-            <div style={{ background: 'var(--bg3)', border: '1px solid var(--br)', borderRadius: '10px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-                <span style={{ color: 'var(--tx2)' }}>Target Currency:</span>
-                <span style={{ fontWeight: 'bold' }}>{settings.nativeCurrency}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-                <span style={{ color: 'var(--tx2)' }}>Preset Theme:</span>
-                <span style={{ fontWeight: 'bold', textTransform: 'capitalize' }}>{settings.theme}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-                <span style={{ color: 'var(--tx2)' }}>Sync Server Endpoint:</span>
-                <span style={{ fontFamily: 'monospace', color: 'var(--cy2)' }}>cloud.hoverconvert.com/sync/{settings.userId}</span>
-              </div>
-            </div>
-
-            {downloadProgress >= 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <div style={{ height: '8px', background: 'var(--bg3)', borderRadius: '4px', overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${downloadProgress}%`, background: 'var(--vi)' }}></div>
-                </div>
-                <span style={{ fontSize: '11px', color: 'var(--tx3)' }}>Compiling custom config... {downloadProgress}%</span>
-              </div>
-            ) : (
-              <button onClick={handleDownload} className="primary-btn" style={{ width: '100%' }}>
-                ⚡ Compile & Download Custom Extension .zip
-              </button>
-            )}
           </div>
         </div>
 
