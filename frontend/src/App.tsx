@@ -723,6 +723,14 @@ export default function App() {
             </div>
           </div>
           <div style={{ textAlign: 'left' }}>
+            <h4 style={{ fontFamily: 'Space Grotesk', fontSize: '14px', marginBottom: '12px', color: 'var(--tx)' }}>External Resources</h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
+              <a href="https://chromewebstore.google.com" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--tx2)' }}>Chrome Web Store</a>
+              <a href="https://openexchangerates.org" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--tx2)' }}>Open Exchange Rates</a>
+              <a href="https://clerk.com" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--tx2)' }}>Clerk Auth Service</a>
+            </div>
+          </div>
+          <div style={{ textAlign: 'left' }}>
             <h4 style={{ fontFamily: 'Space Grotesk', fontSize: '14px', marginBottom: '12px', color: 'var(--tx)' }}>Legal & Support</h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
               <a onClick={() => showToast('Privacy policy loaded', 'info')} style={{ color: 'var(--tx2)', cursor: 'pointer' }}>Privacy Policy</a>
@@ -732,7 +740,16 @@ export default function App() {
             </div>
           </div>
         </div>
-        <span className="fcopy">© 2026 HoverConvert. Premium SEO Landing Pages. All rights reserved.</span>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '20px', width: '100%' }}>
+          <span className="fcopy">© 2026 HoverConvert. Premium SEO Landing Pages. All rights reserved.</span>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <span style={{ fontSize: '12px', color: 'var(--tx2)' }}>Share HoverConvert:</span>
+            <a href="https://twitter.com/intent/tweet?text=Convert%20currencies%20instantly%20while%20browsing%20with%20HoverConvert!%20Check%20it%20out%20at%20https://currenceconverter.me" target="_blank" rel="noopener noreferrer" className="share-btn" style={{ textDecoration: 'none', background: 'var(--br)', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', color: 'var(--tx)' }}>X (Twitter)</a>
+            <a href="https://www.facebook.com/sharer/sharer.php?u=https://currenceconverter.me" target="_blank" rel="noopener noreferrer" className="share-btn" style={{ textDecoration: 'none', background: 'var(--br)', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', color: 'var(--tx)' }}>Facebook</a>
+            <a href="https://www.linkedin.com/sharing/share-offsite/?url=https://currenceconverter.me" target="_blank" rel="noopener noreferrer" className="share-btn" style={{ textDecoration: 'none', background: 'var(--br)', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', color: 'var(--tx)' }}>LinkedIn</a>
+            <a href="https://reddit.com/submit?url=https://currenceconverter.me&title=HoverConvert%20-%20Instant%20Currency%20Conversion%20Tool" target="_blank" rel="noopener noreferrer" className="share-btn" style={{ textDecoration: 'none', background: 'var(--br)', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', color: 'var(--tx)' }}>Reddit</a>
+          </div>
+        </div>
       </footer>
 
       {/* TOAST NOTIFICATION */}
