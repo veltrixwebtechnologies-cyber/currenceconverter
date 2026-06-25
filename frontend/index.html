@@ -161,6 +161,22 @@
 
   <!-- Inline CSS Media Queries to satisfy SEO scanners -->
   <style>
+    html, body {
+      background-color: #0b0f19;
+      color: #f3f4f6;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+    @keyframes pulse {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 15px rgba(99, 102, 241, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
+    }
+    @keyframes fadeText {
+      0% { opacity: 0.5; }
+      100% { opacity: 1; }
+    }
     @media (max-width: 1200px) {
       .hero-grid { grid-template-columns: 1fr; }
     }
@@ -176,7 +192,18 @@
 
 <body>
   <div id="root">
-    <!-- Pre-rendered Semantic HTML for SEO Crawlers (Hydrated by React on mount) -->
+    <!-- Premium loader that matches dark theme -->
+    <div id="loader" style="position: fixed; inset: 0; background: #0b0f19; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; font-family: system-ui, -apple-system, sans-serif;">
+      <div style="width: 60px; height: 60px; border-radius: 50%; background: radial-gradient(circle, #6366f1 0%, #4f46e5 100%); display: flex; align-items: center; justify-content: center; box-shadow: 0 0 30px rgba(99, 102, 241, 0.4); animation: pulse 1.5s infinite ease-in-out;">
+        <span style="color: white; font-size: 1.8rem; font-weight: bold;">⚡</span>
+      </div>
+      <div style="margin-top: 20px; color: #f3f4f6; font-size: 1.25rem; font-weight: 600; letter-spacing: 0.05em; animation: fadeText 1.5s infinite alternate;">HoverConvert</div>
+      <div style="margin-top: 8px; color: #9ca3af; font-size: 0.85rem; letter-spacing: 0.02em;">Loading live exchange rates...</div>
+    </div>
+    
+    <!-- Screen-reader and Bot-only offscreen wrapper for SEO & AI indexing -->
+    <div style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; pointer-events: none; opacity: 0;">
+      <!-- Pre-rendered Semantic HTML for SEO Crawlers (Hydrated by React on mount) -->
     <header style="padding: 20px; border-bottom: 1px solid #eaeaea;">
       <nav style="display: flex; gap: 20px; justify-content: space-between; max-width: 1200px; margin: 0 auto;">
         <span style="font-weight: bold; font-size: 1.2rem;">⚡ Currency Converter - HoverConvert</span>
@@ -203,7 +230,7 @@
           </a>
         </div>
         <div style="margin: 40px auto; max-width: 700px; text-align: center;">
-          <img src="/extension_preview.png" alt="HoverConvert - Instant Currency Converter Chrome extension tooltip in action converting USD prices to INR on Amazon" style="width: 100%; height: auto; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); border: 1px solid #eaeaea;" />
+          <img src="/extension_preview.png" alt="HoverConvert - Instant Currency Converter Chrome extension tooltip in action converting USD prices to INR on Amazon" width="1024" height="1024" style="width: 100%; height: auto; aspect-ratio: 1 / 1; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); border: 1px solid #eaeaea;" />
         </div>
       </section>
 
@@ -427,6 +454,7 @@
         </div>
       </div>
     </footer>
+    </div>
   </div>
   <script type="module" src="/src/main.tsx"></script>
 </body>

@@ -1265,7 +1265,9 @@ function LandingPage({ visibleElements, navigate, isPro }: LandingProps) {
           <img 
             src="/extension_preview.png" 
             alt="HoverConvert - Instant Currency Converter Chrome extension tooltip in action converting USD prices to INR on Amazon" 
-            style={{ width: '100%', height: 'auto', display: 'block' }}
+            width={1024}
+            height={1024}
+            style={{ width: '100%', height: 'auto', aspectRatio: '1 / 1', display: 'block' }}
           />
         </div>
       </div>
