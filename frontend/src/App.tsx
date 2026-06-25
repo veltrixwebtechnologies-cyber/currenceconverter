@@ -22,6 +22,21 @@ const trackEvent = (eventName: string, properties?: Record<string, any>) => {
 // Configurable API base url
 const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://localhost:5001/api' : '/api';
 
+const KNOWN_PATHS = [
+  '/',
+  '/support',
+  '/admin-queries',
+  '/dev-dashboard',
+  '/pricing',
+  '/payment-success',
+  '/payment-failed',
+  '/usd-to-inr',
+  '/eur-to-inr',
+  '/gbp-to-inr',
+  '/currency-converter',
+  '/live-exchange-rates'
+];
+
 interface UserSettings {
   userId: string;
   nativeCurrency: string;
@@ -368,6 +383,98 @@ export default function App() {
     }
   }, [clerkIsLoaded, clerkIsSignedIn, path]);
 
+  // Dynamic Title, Meta Description, and Canonical Link Updates
+  useEffect(() => {
+    let title = 'Currency Converter – Instant Currency Conversion Tool | HoverConvert';
+    let description = 'Convert currencies instantly while browsing websites. Hover or select any amount and get live exchange rates in real time.';
+
+    switch (path) {
+      case '/':
+        title = 'Currency Converter – Instant Currency Conversion Tool | HoverConvert';
+        description = 'Welcome to HoverConvert, the premier browser-based currency converter. Hover or select any amount on any page and get live exchange rates in real time.';
+        break;
+      case '/support':
+        title = 'Priority Support & Help | HoverConvert';
+        description = 'Get priority support for HoverConvert Chrome extension. Submit your issues and get help from our development team.';
+        break;
+      case '/admin-queries':
+        title = 'Admin Queries Portal | HoverConvert';
+        description = 'HoverConvert admin ticket and support query management interface.';
+        break;
+      case '/dev-dashboard':
+        title = 'Developer Dashboard | HoverConvert';
+        description = 'Access developer options, api keys, and usage statistics for HoverConvert Pro.';
+        break;
+      case '/pricing':
+        title = 'Get HoverConvert Pro – Lifetime Access | HoverConvert';
+        description = 'Upgrade to HoverConvert Pro to unlock offline conversions, custom markups, unlimited daily usage, and more.';
+        break;
+      case '/payment-success':
+        title = 'Payment Successful | HoverConvert';
+        description = 'Thank you for upgrading to HoverConvert Pro! Your premium lifetime license is now activated.';
+        break;
+      case '/payment-failed':
+        title = 'Payment Failed | HoverConvert';
+        description = 'Your transaction could not be completed. Please try upgrading again or contact support.';
+        break;
+      case '/usd-to-inr':
+        title = 'USD to INR Converter - Live Dollar to Rupee Exchange Rate | HoverConvert';
+        description = 'Convert US Dollars (USD) to Indian Rupees (INR) instantly. Check real-time USD to INR exchange rates, historical rates, and live conversion data.';
+        break;
+      case '/eur-to-inr':
+        title = 'EUR to INR Converter - Live Euro to Rupee Exchange Rate | HoverConvert';
+        description = 'Convert Euros (EUR) to Indian Rupees (INR) instantly. Check real-time EUR to INR exchange rates, historical rates, and live conversion data.';
+        break;
+      case '/gbp-to-inr':
+        title = 'GBP to INR Converter - Live Pound to Rupee Exchange Rate | HoverConvert';
+        description = 'Convert British Pounds (GBP) to Indian Rupees (INR) instantly. Check real-time GBP to INR exchange rates, historical rates, and live conversion data.';
+        break;
+      case '/currency-converter':
+        title = 'Free Instant Currency Converter Tool - 160+ Currencies | HoverConvert';
+        description = 'Free online currency converter tool. Convert over 160+ world currencies instantly with real-time live forex exchange rates.';
+        break;
+      case '/live-exchange-rates':
+        title = 'Live Exchange Rates Table - Real-Time Forex Rates | HoverConvert';
+        description = 'View real-time forex exchange rates table. Compare popular currency pairs instantly with live data updated every 6 hours.';
+        break;
+      default:
+        title = 'Page Not Found | HoverConvert';
+        description = 'The page you are looking for does not exist on HoverConvert.';
+    }
+
+    document.title = title;
+
+    // Update meta description
+    let metaDesc = document.querySelector('meta[name="description"]');
+    if (!metaDesc) {
+      metaDesc = document.createElement('meta');
+      metaDesc.setAttribute('name', 'description');
+      document.head.appendChild(metaDesc);
+    }
+    metaDesc.setAttribute('content', description);
+
+    // Update og:title
+    let ogTitle = document.querySelector('meta[property="og:title"]');
+    if (ogTitle) ogTitle.setAttribute('content', title);
+
+    // Update og:description
+    let ogDesc = document.querySelector('meta[property="og:description"]');
+    if (ogDesc) ogDesc.setAttribute('content', description);
+
+    // Update og:url
+    let ogUrl = document.querySelector('meta[property="og:url"]');
+    if (ogUrl) ogUrl.setAttribute('content', `https://www.currenceconverter.me${path === '/' ? '/' : path}`);
+
+    // Update canonical link dynamically
+    let canonicalLink = document.querySelector('link[rel="canonical"]');
+    if (!canonicalLink) {
+      canonicalLink = document.createElement('link');
+      canonicalLink.setAttribute('rel', 'canonical');
+      document.head.appendChild(canonicalLink);
+    }
+    canonicalLink.setAttribute('href', `https://www.currenceconverter.me${path === '/' ? '/' : path}`);
+  }, [path]);
+
 
   const fetchRates = async () => {
     try {
@@ -696,6 +803,10 @@ export default function App() {
         <LiveExchangeRatesPage navigate={navigate} rates={rates} />
       )}
 
+      {!KNOWN_PATHS.includes(path) && (
+        <NotFoundPage navigate={navigate} />
+      )}
+
       {/* FOOTER */}
       <footer>
         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: '30px', width: '100%', marginBottom: '30px', borderBottom: '1px solid var(--br)', paddingBottom: '30px' }}>
@@ -744,10 +855,10 @@ export default function App() {
           <span className="fcopy">© 2026 HoverConvert. Premium SEO Landing Pages. All rights reserved.</span>
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
             <span style={{ fontSize: '12px', color: 'var(--tx2)' }}>Share HoverConvert:</span>
-            <a href="https://twitter.com/intent/tweet?text=Convert%20currencies%20instantly%20while%20browsing%20with%20HoverConvert!%20Check%20it%20out%20at%20https://currenceconverter.me" target="_blank" rel="noopener noreferrer" className="share-btn" style={{ textDecoration: 'none', background: 'var(--br)', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', color: 'var(--tx)' }}>X (Twitter)</a>
-            <a href="https://www.facebook.com/sharer/sharer.php?u=https://currenceconverter.me" target="_blank" rel="noopener noreferrer" className="share-btn" style={{ textDecoration: 'none', background: 'var(--br)', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', color: 'var(--tx)' }}>Facebook</a>
-            <a href="https://www.linkedin.com/sharing/share-offsite/?url=https://currenceconverter.me" target="_blank" rel="noopener noreferrer" className="share-btn" style={{ textDecoration: 'none', background: 'var(--br)', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', color: 'var(--tx)' }}>LinkedIn</a>
-            <a href="https://reddit.com/submit?url=https://currenceconverter.me&title=HoverConvert%20-%20Instant%20Currency%20Conversion%20Tool" target="_blank" rel="noopener noreferrer" className="share-btn" style={{ textDecoration: 'none', background: 'var(--br)', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', color: 'var(--tx)' }}>Reddit</a>
+            <a href="https://twitter.com/intent/tweet?text=Convert%20currencies%20instantly%20while%20browsing%20with%20HoverConvert!%20Check%20it%20out%20at%20https://www.currenceconverter.me/" target="_blank" rel="noopener noreferrer" className="share-btn" style={{ textDecoration: 'none', background: 'var(--br)', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', color: 'var(--tx)' }}>X (Twitter)</a>
+            <a href="https://www.facebook.com/sharer/sharer.php?u=https://www.currenceconverter.me/" target="_blank" rel="noopener noreferrer" className="share-btn" style={{ textDecoration: 'none', background: 'var(--br)', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', color: 'var(--tx)' }}>Facebook</a>
+            <a href="https://www.linkedin.com/sharing/share-offsite/?url=https://www.currenceconverter.me/" target="_blank" rel="noopener noreferrer" className="share-btn" style={{ textDecoration: 'none', background: 'var(--br)', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', color: 'var(--tx)' }}>LinkedIn</a>
+            <a href="https://reddit.com/submit?url=https://www.currenceconverter.me/&title=HoverConvert%20-%20Instant%20Currency%20Conversion%20Tool" target="_blank" rel="noopener noreferrer" className="share-btn" style={{ textDecoration: 'none', background: 'var(--br)', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', color: 'var(--tx)' }}>Reddit</a>
           </div>
         </div>
       </footer>
@@ -1147,6 +1258,17 @@ function LandingPage({ visibleElements, navigate, isPro }: LandingProps) {
           </div>
         </div>
       </section>
+
+      {/* EXTENSION PREVIEW IMAGE */}
+      <div style={{ display: 'flex', justifyContent: 'center', width: '100%', padding: '0 20px', boxSizing: 'border-box', marginBottom: '80px' }}>
+        <div style={{ maxWidth: '800px', width: '100%', position: 'relative', borderRadius: '16px', overflow: 'hidden', border: '1px solid var(--br)', boxShadow: '0 20px 50px rgba(0,0,0,0.3)', background: 'var(--bg2)' }}>
+          <img 
+            src="/extension_preview.png" 
+            alt="HoverConvert - Instant Currency Converter Chrome extension tooltip in action converting USD prices to INR on Amazon" 
+            style={{ width: '100%', height: 'auto', display: 'block' }}
+          />
+        </div>
+      </div>
 
       {/* STATS BAR */}
       <div className="stats-bar">
@@ -3322,6 +3444,54 @@ function AdminQueriesPage({ navigate, clerkUser, clerkGetToken, showToast }: Adm
               {isLoading ? 'Fetching tickets...' : 'No queries found. All caught up! 🎉'}
             </div>
           )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+interface NotFoundProps {
+  navigate: (to: string) => void;
+}
+
+function NotFoundPage({ navigate }: NotFoundProps) {
+  return (
+    <section className="hero" style={{ minHeight: '80vh', padding: '120px 20px 80px' }}>
+      <div className="hero-glow-l"></div>
+      <div className="hero-glow-r"></div>
+      <div className="hero-grid"></div>
+      <div style={{ position: 'relative', zIndex: 10, maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
+        <div style={{ 
+          fontSize: '120px', 
+          fontWeight: '900', 
+          lineHeight: '1', 
+          background: 'linear-gradient(130deg, var(--vi2) 0%, var(--cy) 100%)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          backgroundClip: 'text',
+          marginBottom: '20px',
+          fontFamily: 'Space Grotesk, sans-serif',
+          letterSpacing: '-5px'
+        }}>
+          404
+        </div>
+        <h2 style={{ fontSize: '32px', fontWeight: '700', marginBottom: '16px', color: 'var(--tx)', fontFamily: 'Space Grotesk, sans-serif' }}>
+          Page Not Found
+        </h2>
+        <p style={{ fontSize: '16px', color: 'var(--tx2)', marginBottom: '32px', lineHeight: '1.6' }}>
+          The page you are looking for might have been removed, had its name changed, or is temporarily unavailable. 
+          Use the links below to navigate back to safety.
+        </p>
+        <div style={{ display: 'flex', gap: '14px', justifyContent: 'center', flexWrap: 'wrap' }}>
+          <button onClick={() => navigate('/')} className="btn-p">
+            ⚡ Back to Home
+          </button>
+          <button onClick={() => navigate('/currency-converter')} className="btn-g">
+            🧮 Currency Converter
+          </button>
+          <button onClick={() => navigate('/live-exchange-rates')} className="btn-g">
+            📈 Live Exchange Rates
+          </button>
         </div>
       </div>
     </section>
