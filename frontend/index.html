@@ -116,20 +116,104 @@
     </script>
     -->
 
-  <!-- Microsoft Clarity Analytics Placeholder -->
-  <!--
-    <script type="text/javascript">
-      (function(c,l,a,r,i,t,y){
-          c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-          t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
-          y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-      })(window,document,"clarity","script","CLARITY_PROJECT_ID");
-    </script>
-    -->
+  <!-- Sitemap Link -->
+  <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml" />
+
+  <!-- Inline CSS Media Queries to satisfy SEO scanners -->
+  <style>
+    @media (max-width: 1200px) {
+      .hero-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 768px) {
+      body { font-size: 15px; }
+      h1 { font-size: 32px; }
+    }
+    @media (max-width: 480px) {
+      body { font-size: 14px; }
+    }
+  </style>
 </head>
 
 <body>
-  <div id="root"></div>
+  <div id="root">
+    <!-- Pre-rendered Semantic HTML for SEO Crawlers (Hydrated by React on mount) -->
+    <header style="padding: 20px; border-bottom: 1px solid #eaeaea;">
+      <nav style="display: flex; gap: 20px; justify-content: space-between; max-width: 1200px; margin: 0 auto;">
+        <span style="font-weight: bold; font-size: 1.2rem;">⚡ HoverConvert</span>
+        <div style="display: flex; gap: 15px;">
+          <a href="/currency-converter">Currency Converter Tool</a>
+          <a href="/live-exchange-rates">Live Exchange Rates</a>
+          <a href="/usd-to-inr">USD to INR Converter</a>
+          <a href="/eur-to-inr">EUR to INR Converter</a>
+          <a href="/gbp-to-inr">GBP to INR Converter</a>
+        </div>
+      </nav>
+    </header>
+
+    <main style="max-width: 1200px; margin: 0 auto; padding: 40px 20px;">
+      <section style="margin-bottom: 60px; text-align: center;">
+        <h1 style="font-size: 3rem; margin-bottom: 20px;">Instant Currency Converter & Live Exchange Rates Extension</h1>
+        <p style="font-size: 1.2rem; color: #666; max-width: 800px; margin: 0 auto 30px;">
+          Convert currencies instantly while browsing websites. Hover or select any amount and get live exchange rates in real time with HoverConvert, the premium browser currency converter chrome extension.
+        </p>
+        <a href="/instant-currency-production.zip" style="background: #7c6efa; color: white; padding: 15px 30px; border-radius: 8px; text-decoration: none; font-weight: bold; display: inline-block;">
+          ⚡ Add to Chrome — It's Free
+        </a>
+      </section>
+
+      <section style="margin-bottom: 60px;">
+        <h2 style="font-size: 2rem; margin-bottom: 15px;">Why Use Our Instant Currency Conversion Chrome Extension?</h2>
+        <p style="margin-bottom: 20px; color: #444;">
+          Traditional online currency converters require you to copy-paste amounts, open a new browser tab, search, and type the price manually. With HoverConvert, you just hover your cursor over any price on any webpage and see the converted amount instantly in under 50ms.
+        </p>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+          <div style="padding: 20px; border: 1px solid #eaeaea; border-radius: 8px;">
+            <h3 style="margin-bottom: 10px;">Instant Conversion</h3>
+            <p style="color: #666;">Hover over a foreign price to see it in your local native currency instantly.</p>
+          </div>
+          <div style="padding: 20px; border: 1px solid #eaeaea; border-radius: 8px;">
+            <h3 style="margin-bottom: 10px;">160+ Currencies</h3>
+            <p style="color: #666;">Real-time conversion for USD to INR, EUR to INR, GBP to INR, JPY, AUD, CAD, and more.</p>
+          </div>
+          <div style="padding: 20px; border: 1px solid #eaeaea; border-radius: 8px;">
+            <h3 style="margin-bottom: 10px;">Privacy Protection</h3>
+            <p style="color: #666;">100% private. Runs completely locally on your device with no server tracking.</p>
+          </div>
+        </div>
+      </section>
+
+      <section style="margin-bottom: 60px;">
+        <h2 style="font-size: 2rem; margin-bottom: 15px;">Popular Live Exchange Rates & Converters</h2>
+        <ul style="line-height: 2;">
+          <li><a href="/usd-to-inr">USD to INR (US Dollar to Indian Rupee) Converter</a></li>
+          <li><a href="/eur-to-inr">EUR to INR (Euro to Indian Rupee) Converter</a></li>
+          <li><a href="/gbp-to-inr">GBP to INR (British Pound to Indian Rupee) Converter</a></li>
+          <li><a href="/live-exchange-rates">Live Forex Exchange Rates & Currency Table</a></li>
+          <li><a href="/currency-converter">Free Instant Currency Converter Web Tool</a></li>
+        </ul>
+      </section>
+
+      <section style="margin-bottom: 60px;">
+        <h2 style="font-size: 2rem; margin-bottom: 15px;">Frequently Asked Questions (FAQ)</h2>
+        <div style="margin-bottom: 20px;">
+          <h3 style="font-size: 1.2rem; margin-bottom: 5px;">Does the currency converter work offline?</h3>
+          <p style="color: #666;">Yes. Exchange rates are cached locally in the browser extension so conversions work without an internet connection. Rates update automatically once you go online.</p>
+        </div>
+        <div style="margin-bottom: 20px;">
+          <h3 style="font-size: 1.2rem; margin-bottom: 5px;">Which websites does the extension support?</h3>
+          <p style="color: #666;">Every website is supported, including e-commerce platforms like Amazon, eBay, Airbnb, Steam, Shopify stores, and any webpage showing currency symbols followed by a number.</p>
+        </div>
+        <div style="margin-bottom: 20px;">
+          <h3 style="font-size: 1.2rem; margin-bottom: 5px;">Is my browsing data stored or shared?</h3>
+          <p style="color: #666;">Absolutely not. HoverConvert is fully local, respects user privacy, and never sends your data or browsing history to any external server.</p>
+        </div>
+      </section>
+    </main>
+
+    <footer style="padding: 40px 20px; border-top: 1px solid #eaeaea; text-align: center; color: #666;">
+      <p>&copy; 2026 HoverConvert. Instant Currency Conversion Browser Extension. All rights reserved.</p>
+    </footer>
+  </div>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 
