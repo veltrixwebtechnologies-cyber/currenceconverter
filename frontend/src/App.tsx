@@ -391,7 +391,7 @@ export default function App() {
     switch (path) {
       case '/':
         title = 'Currency Converter – Instant Currency Conversion Tool | HoverConvert';
-        description = 'Welcome to HoverConvert, the premier browser-based currency converter. Hover or select any amount on any page and get live exchange rates in real time.';
+        description = 'Convert currencies instantly while browsing websites. Hover or select any amount and get live exchange rates in real time.';
         break;
       case '/support':
         title = 'Priority Support & Help | HoverConvert';
