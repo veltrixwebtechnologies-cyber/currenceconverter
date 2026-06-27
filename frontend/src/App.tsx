@@ -116,8 +116,22 @@ export default function App() {
     return false;
   });
   const [licenseInfo, setLicenseInfo] = useState<License | null>(null);
+  const [extensionId, setExtensionId] = useState<string | null>(() => localStorage.getItem('hc_extension_id'));
 
+  useEffect(() => {
+    const handleExtensionReady = (e: Event) => {
+      const customEvent = e as CustomEvent<string>;
+      if (customEvent.detail) {
+        localStorage.setItem('hc_extension_id', customEvent.detail);
+        setExtensionId(customEvent.detail);
+      }
+    };
 
+    window.addEventListener('HC_EXTENSION_READY', handleExtensionReady);
+    return () => {
+      window.removeEventListener('HC_EXTENSION_READY', handleExtensionReady);
+    };
+  }, []);
 
   // App Settings
   const [settings, setSettings] = useState<UserSettings>({
@@ -264,7 +278,7 @@ export default function App() {
   useEffect(() => {
     if (!clerkIsLoaded) return;
     const syncAuthWithExtension = async () => {
-      const targetExtId = localStorage.getItem('hc_extension_id');
+      const targetExtId = extensionId || localStorage.getItem('hc_extension_id');
       if (!targetExtId) return;
 
       try {
@@ -321,7 +335,7 @@ export default function App() {
       }
     };
     syncAuthWithExtension();
-  }, [clerkIsLoaded, clerkIsSignedIn, clerkUser, isPro]);
+  }, [clerkIsLoaded, clerkIsSignedIn, clerkUser, isPro, extensionId]);
 
 
   // Fetch settings once userId is loaded
@@ -1566,9 +1580,15 @@ function LandingPage({ visibleElements, navigate, isPro }: LandingProps) {
               <li className="no">Unlimited conversions</li>
               <li className="no">Favorite currencies</li>
             </ul>
-            <button onClick={() => { trackEvent('cta_pricing_explore', { plan: 'free' }); navigate('/currency-converter'); }} className="pbtn pbtn-f">
-              Use Free Calculator
-            </button>
+            {isPro ? (
+              <div style={{ textAlign: 'center', padding: '13px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--br)', color: 'var(--tx3)', fontWeight: 600, fontSize: '15px' }}>
+                Previous Plan
+              </div>
+            ) : (
+              <button onClick={() => { trackEvent('cta_pricing_explore', { plan: 'free' }); navigate('/currency-converter'); }} className="pbtn pbtn-f">
+                Use Free Calculator
+              </button>
+            )}
           </div>
           <div className={`pcard hot reveal-init d1 ${isVisible('p-pro') ? 'reveal-visible' : ''}`} data-reveal-id="p-pro">
             <div className="pbadge">Best Value</div>
@@ -1585,9 +1605,9 @@ function LandingPage({ visibleElements, navigate, isPro }: LandingProps) {
               <li>Priority support</li>
             </ul>
             {isPro ? (
-              <button className="pbtn pbtn-p" style={{ background: 'var(--success)', cursor: 'default' }}>
-                ✓ Lifetime Active
-              </button>
+              <div style={{ textAlign: 'center', padding: '13px', borderRadius: '12px', background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.3)', color: 'var(--cy)', fontWeight: 700, fontSize: '15px' }}>
+                ✓ Current Plan (Lifetime Active)
+              </div>
             ) : (
               <button onClick={() => { trackEvent('cta_pricing_explore', { plan: 'pro' }); navigate('/pricing'); }} className="pbtn pbtn-p">
                 Upgrade to Pro — $4.99
@@ -1808,13 +1828,19 @@ function PricingPage({ navigate, isPro, clerkIsSignedIn, clerkIsLoaded, clerkUse
                 'Favorite currencies',
               ].map((f) => <li key={f} className="no" style={{ display: 'flex', gap: '8px', fontSize: '14px', color: 'var(--tx3)', textDecoration: 'line-through' }}><span>✕</span> {f}</li>)}
             </ul>
-            <button
-              className="pbtn pbtn-f"
-              onClick={() => navigate('/currency-converter')}
-              style={{ width: '100%', padding: '13px', borderRadius: '12px', background: 'transparent', border: '1px solid var(--br)', color: 'var(--tx2)', cursor: 'pointer', fontWeight: 600, fontSize: '15px' }}
-            >
-              Use Free Calculator
-            </button>
+            {isPro ? (
+              <div style={{ textAlign: 'center', padding: '13px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--br)', color: 'var(--tx3)', fontWeight: 600, fontSize: '15px' }}>
+                Previous Plan
+              </div>
+            ) : (
+              <button
+                className="pbtn pbtn-f"
+                onClick={() => navigate('/currency-converter')}
+                style={{ width: '100%', padding: '13px', borderRadius: '12px', background: 'transparent', border: '1px solid var(--br)', color: 'var(--tx2)', cursor: 'pointer', fontWeight: 600, fontSize: '15px' }}
+              >
+                Use Free Calculator
+              </button>
+            )}
           </div>
 
           {/* Pro Plan */}
@@ -1841,7 +1867,7 @@ function PricingPage({ navigate, isPro, clerkIsSignedIn, clerkIsLoaded, clerkUse
 
             {isPro ? (
               <div style={{ textAlign: 'center', padding: '13px', borderRadius: '12px', background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.3)', color: 'var(--cy)', fontWeight: 700, fontSize: '15px' }}>
-                ✓ You're already a Pro member!
+                ✓ Current Plan (Lifetime Active)
               </div>
             ) : !clerkEnabled ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
