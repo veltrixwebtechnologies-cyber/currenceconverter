@@ -605,7 +605,7 @@ export default function App() {
       {/* FLOAT NAV BAR */}
       <nav id="navbar" style={{ background: navScrolled || path !== '/' ? 'rgba(6,8,14,0.94)' : 'rgba(6,8,14,0.75)' }}>
         <a onClick={() => navigate('/')} className="logo" style={{ cursor: 'pointer' }}>
-          <div className="logo-mark">⚡</div>HoverConvert
+          <div className="logo-mark"><img src="/logo.png" alt="HoverConvert Logo" /></div>HoverConvert
         </a>
 
         {path === '/' ? (
@@ -826,7 +826,7 @@ export default function App() {
         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: '30px', width: '100%', marginBottom: '30px', borderBottom: '1px solid var(--br)', paddingBottom: '30px' }}>
           <div style={{ textAlign: 'left' }}>
             <a onClick={() => navigate('/')} className="logo" style={{ cursor: 'pointer', marginBottom: '10px' }}>
-              <div className="logo-mark">⚡</div>HoverConvert
+              <div className="logo-mark"><img src="/logo.png" alt="HoverConvert Logo" /></div>HoverConvert
             </a>
             <p style={{ fontSize: '12px', color: 'var(--tx2)', maxWidth: '280px', marginTop: '10px' }}>
               Instant currency conversion tool. Hover over any amount on any page and get real-time exchange rates instantly.
