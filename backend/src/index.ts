@@ -1,4 +1,5 @@
 import express from 'express';
+import crypto from 'crypto';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { createClerkClient, verifyToken } from '@clerk/backend';
@@ -51,8 +52,26 @@ async function getLiveRates(): Promise<Record<string, number>> {
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 
+const ALLOWED_ORIGINS: string[] = [
+  'https://currenceconverter.me',
+  'https://www.currenceconverter.me',
+];
+if (process.env.NODE_ENV !== 'production') {
+  ALLOWED_ORIGINS.push(
+    'http://localhost:5173', 'http://localhost:5001',
+    'http://127.0.0.1:5173', 'http://127.0.0.1:5001'
+  );
+}
+
 app.use(cors({
-  origin: true,
+  origin: (origin, callback) => {
+    // Allow requests with no origin (server-to-server, curl, extensions)
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
 
@@ -95,6 +114,25 @@ app.get('/api/rates', async (req, res) => {
   }
 });
 
+// ── Guest token helpers (signed, non-guessable) ──────────────────────────────
+
+const GUEST_SIGNING_SECRET = process.env.GUEST_SIGNING_SECRET || 'hc-guest-default-' + (process.env.CLERK_SECRET_KEY || '').slice(-16);
+
+function createGuestToken(userId: string): string {
+  return crypto.createHmac('sha256', GUEST_SIGNING_SECRET).update(userId).digest('hex');
+}
+
+function verifyGuestSignature(userId: string, token: string): boolean {
+  if (!token || !userId) return false;
+  try {
+    const expected = createGuestToken(userId);
+    if (expected.length !== token.length) return false;
+    return crypto.timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(token, 'hex'));
+  } catch {
+    return false;
+  }
+}
+
 // ── Helper: Verify user access to settings ────────────────────────────────────
 
 async function verifyUserAccess(req: express.Request, userIdFromParam: string): Promise<boolean> {
@@ -102,9 +140,21 @@ async function verifyUserAccess(req: express.Request, userIdFromParam: string): 
   if (tokenClerkUserId) {
     return tokenClerkUserId === userIdFromParam;
   }
-  // Allow if it matches the guest format: user_ followed by 9 alphanumeric characters
-  return /^user_[a-z0-9]{9}$/.test(userIdFromParam);
+  // Guest access requires a server-issued signed token
+  const guestToken = req.headers['x-guest-token'] as string;
+  if (guestToken && userIdFromParam.startsWith('user_')) {
+    return verifyGuestSignature(userIdFromParam, guestToken);
+  }
+  return false;
 }
+
+// ── Guest token endpoint ──────────────────────────────────────────────────────
+
+app.post('/api/guest-token', (_req, res) => {
+  const userId = 'user_' + crypto.randomBytes(5).toString('hex').slice(0, 9);
+  const token = createGuestToken(userId);
+  res.json({ userId, token });
+});
 
 // ── Settings endpoints ────────────────────────────────────────────────────────
 
@@ -359,13 +409,8 @@ app.delete('/api/feedback/:id', async (req, res) => {
 
 app.get('/api/check-premium', async (req, res) => {
   try {
-    // Try to get userId from auth token first (most secure)
-    let clerkUserId: string | null = await getClerkUserId(req);
-
-    // Fallback: allow direct userId query param (less secure, for extension fallback)
-    if (!clerkUserId && req.query.userId) {
-      clerkUserId = req.query.userId as string;
-    }
+    // Auth-derived userId only — no query param fallback
+    const clerkUserId: string | null = await getClerkUserId(req);
 
     if (!clerkUserId) {
       // Not logged in — free tier
