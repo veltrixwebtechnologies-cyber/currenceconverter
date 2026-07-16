@@ -8,7 +8,7 @@ import {
   UserButton
 } from '@clerk/clerk-react';
 import './App.css';
-import { API_BASE, trackEvent } from './types';
+import { API_BASE } from './types';
 import type { UserSettings, License } from './types';
 
 // Page imports
@@ -25,6 +25,7 @@ import GBPToINRPage from './pages/GBPToINRPage';
 import CurrencyConverterToolPage from './pages/CurrencyConverterToolPage';
 import LiveExchangeRatesPage from './pages/LiveExchangeRatesPage';
 import NotFoundPage from './pages/NotFoundPage';
+import PrivacyPage from './pages/PrivacyPage';
 
 function AppContent() {
   const navigate = useNavigate();
@@ -370,6 +371,10 @@ function AppContent() {
       case '/':
         title = 'Currency Converter – Instant Currency Conversion Tool | HoverConvert';
         description = 'Convert currencies instantly while browsing websites. Hover or select any amount and get live exchange rates in real time.';
+        break;
+      case '/privacy':
+        title = 'Privacy Policy | HoverConvert';
+        description = 'Read the Privacy Policy for HoverConvert. Learn how we handle your data, local currency processing, and security practices.';
         break;
       case '/support':
         title = 'Priority Support & Help | HoverConvert';
@@ -739,6 +744,7 @@ function AppContent() {
         <Route path="/gbp-to-inr" element={<GBPToINRPage rates={rates} />} />
         <Route path="/currency-converter" element={<CurrencyConverterToolPage rates={rates} />} />
         <Route path="/live-exchange-rates" element={<LiveExchangeRatesPage rates={rates} />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
 
@@ -779,7 +785,7 @@ function AppContent() {
           <div style={{ textAlign: 'left' }}>
             <h4 style={{ fontFamily: 'Space Grotesk', fontSize: '14px', marginBottom: '12px', color: 'var(--tx)' }}>Legal & Support</h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
-              <a onClick={() => showToast('Privacy policy loaded', 'info')} style={{ color: 'var(--tx2)', cursor: 'pointer' }}>Privacy Policy</a>
+              <a onClick={() => handleNavigate('/privacy')} style={{ color: 'var(--tx2)', cursor: 'pointer' }}>Privacy Policy</a>
               <a onClick={() => showToast('Terms of service loaded', 'info')} style={{ color: 'var(--tx2)', cursor: 'pointer' }}>Terms of Service</a>
               <a onClick={() => handleNavigate('/support')} style={{ color: 'var(--tx2)', cursor: 'pointer' }}>Priority Support</a>
               <a onClick={() => handleNavigate('/admin-queries')} style={{ color: 'var(--tx2)', cursor: 'pointer' }}>Admin Portal</a>
