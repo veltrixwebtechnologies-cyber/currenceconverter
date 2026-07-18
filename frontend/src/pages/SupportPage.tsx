@@ -51,7 +51,7 @@ function SupportPage({ clerkUser, showToast }: Omit<SupportPageProps, 'navigate'
   };
 
   const faqs = [
-    { q: "How do I install the HoverConvert extension?", a: "Download the compiled zip from the developer dashboard or visit the Chrome Web Store. Drag-and-drop the folder into chrome://extensions with Developer Mode toggled on." },
+    { q: "How do I install the HoverConvert extension?", a: "Simply visit the Chrome Web Store link, click 'Add to Chrome', and the extension will install automatically. No developer mode or manual loading is required!" },
     { q: "Does HoverConvert support offline conversions?", a: "Yes, it caches the latest exchange rates. If you lose internet connectivity, the extension will use the last known rates to display conversions." },
     { q: "How do I customize the default currency?", a: "Open the extension popup in your browser toolbar or go to the Developer Dashboard settings to choose your target currency and theme." }
   ];

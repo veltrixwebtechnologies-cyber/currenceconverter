@@ -151,12 +151,7 @@ function LandingPage({ isPro }: LandingProps) {
 
   const handleAddtoChrome = (pos: string) => {
     trackEvent('cta_add_to_chrome', { position: pos });
-    const link = document.createElement('a');
-    link.href = '/instant-currency-production.zip';
-    link.download = 'instant-currency-production.zip';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    window.open('https://chromewebstore.google.com/detail/kknnjgicdlamepecgkgafdgodmeipibp?utm_source=item-share-cb', '_blank', 'noopener,noreferrer');
   };
 
   const isVisible = (id: string) => visibleElements[id] !== false;

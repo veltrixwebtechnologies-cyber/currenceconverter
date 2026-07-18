@@ -777,7 +777,7 @@ function AppContent() {
           <div style={{ textAlign: 'left' }}>
             <h4 style={{ fontFamily: 'Space Grotesk', fontSize: '14px', marginBottom: '12px', color: 'var(--tx)' }}>External Resources</h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
-              <a href="https://chromewebstore.google.com" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--tx2)' }}>Chrome Web Store</a>
+              <a href="https://chromewebstore.google.com/detail/kknnjgicdlamepecgkgafdgodmeipibp?utm_source=item-share-cb" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--tx2)' }}>Chrome Web Store</a>
               <a href="https://openexchangerates.org" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--tx2)' }}>Open Exchange Rates</a>
               <a href="https://clerk.com" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--tx2)' }}>Clerk Auth Service</a>
             </div>
