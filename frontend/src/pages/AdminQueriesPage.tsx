@@ -18,9 +18,9 @@ function AdminQueriesPage({ clerkUser, clerkGetToken, showToast }: Omit<AdminQue
   const [search, setSearch] = useState('');
 
   const isAdminEmail = !!(
-    clerkUser?.primaryEmailAddress?.emailAddress &&
-    (clerkUser.primaryEmailAddress.emailAddress.includes('sudhan') ||
-      clerkUser.primaryEmailAddress.emailAddress.includes('admin'))
+    clerkUser?.email &&
+    (clerkUser.email.includes('sudhan') ||
+      clerkUser.email.includes('admin'))
   );
 
   const authenticated = isAuthenticated || isAdminEmail;

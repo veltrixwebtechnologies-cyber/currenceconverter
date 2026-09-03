@@ -16,7 +16,7 @@ export default async function Home() {
         </Show>
         <Show when="signed-out">
           <h2 className="text-2xl font-bold mb-2">Hello Guest</h2>
-          <p className="text-zinc-600 dark:text-zinc-400 mb-4">Please sign in or sign up using the buttons in the header to view your profile details.</p>
+          <p className="text-zinc-600 dark:text-zinc-400 mb-4">Please click &quot;Continue with Google&quot; in the header to view your profile details.</p>
         </Show>
       </div>
     </div>

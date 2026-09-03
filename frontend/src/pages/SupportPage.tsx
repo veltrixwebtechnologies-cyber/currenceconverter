@@ -10,13 +10,13 @@ interface SupportPageProps {
 
 function SupportPage({ clerkUser, showToast }: Omit<SupportPageProps, 'navigate'>) {
   const navigate = useNavigate();
-  const [email, setEmail] = useState(clerkUser?.primaryEmailAddress?.emailAddress || '');
+  const [email, setEmail] = useState(clerkUser?.email || '');
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    if (clerkUser?.primaryEmailAddress?.emailAddress) {
-      setEmail(clerkUser.primaryEmailAddress.emailAddress);
+    if (clerkUser?.email) {
+      setEmail(clerkUser.email);
     }
   }, [clerkUser]);
 

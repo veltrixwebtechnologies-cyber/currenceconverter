@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { API_BASE } from '../types';
 
 function PaymentSuccessPage({
@@ -12,6 +12,7 @@ function PaymentSuccessPage({
   clerkUser: any;
 }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [confettiItems] = useState(() =>
     Array.from({ length: 40 }, (_, i) => ({
       id: i,
@@ -24,56 +25,63 @@ function PaymentSuccessPage({
 
   const [checking, setChecking] = useState(false);
   const [attempts, setAttempts] = useState(0);
-  const [manualSuccess, setManualSuccess] = useState(false);
 
   useEffect(() => {
     if (isPro) return;
 
     let active = true;
-    let timer: any;
 
-    const poll = async () => {
+    const confirmAndPoll = async () => {
       if (!active) return;
       setChecking(true);
+
+      // Extract payment parameters from URL search
+      const searchParams = new URLSearchParams(location.search);
+      const subscriptionId = searchParams.get('subscription_id');
+      const paymentId = searchParams.get('payment_id');
+      const email = searchParams.get('email') || clerkUser?.email;
+
+      // Attempt automatic payment confirmation via backend API
+      if (clerkUser?.uid) {
+        try {
+          await fetch(`${API_BASE}/subscription/confirm-payment`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${clerkUser.uid}`
+            },
+            body: JSON.stringify({
+              paymentId,
+              subscriptionId,
+              email
+            })
+          });
+        } catch (err) {
+          console.warn('[PaymentSuccessPage] Direct payment confirmation attempt error:', err);
+        }
+      }
+
+      // Check premium status
       const isUpgraded = await refetchPremium();
       setChecking(false);
       setAttempts((prev) => prev + 1);
 
-      if (!isUpgraded && active && attempts < 10) {
-        timer = setTimeout(poll, 3000);
+      if (!isUpgraded && active && attempts < 5) {
+        setTimeout(confirmAndPoll, 2000);
       }
     };
 
-    timer = setTimeout(poll, 2500);
+    confirmAndPoll();
 
     return () => {
       active = false;
-      clearTimeout(timer);
     };
-  }, [isPro, refetchPremium, attempts]);
+  }, [isPro, clerkUser, location.search]);
 
   const handleManualCheck = async () => {
     setChecking(true);
     await refetchPremium();
     setChecking(false);
-  };
-
-  const handleManualActivate = async () => {
-    if (!clerkUser?.id) return;
-    setChecking(true);
-    try {
-      const email = clerkUser.primaryEmailAddress?.emailAddress || '';
-      const res = await fetch(`${API_BASE}/debug/make-pro?userId=${clerkUser.id}&email=${encodeURIComponent(email)}`);
-      const data = await res.json();
-      if (data.success) {
-        setManualSuccess(true);
-        await refetchPremium();
-      }
-    } catch (err) {
-      console.error('Manual activation failed:', err);
-    } finally {
-      setChecking(false);
-    }
   };
 
   return (
@@ -121,8 +129,8 @@ function PaymentSuccessPage({
 
         <p style={{ fontSize: '16px', color: 'var(--tx2)', lineHeight: 1.7, marginBottom: '32px' }}>
           {isPro 
-            ? 'Your account has been upgraded successfully. You now have lifetime access to HoverConvert Pro! Log in to the extension with the same account to get unlimited conversions.'
-            : 'Your payment was successful! We are syncing with the payment provider to activate your premium features. This usually takes around 5-10 seconds.'
+            ? 'Your account has been upgraded successfully. You now have 3 months of access to HoverConvert Pro! Log in to the extension with the same account to get unlimited conversions.'
+            : 'Your payment was received. Activating your premium features now...'
           }
         </p>
 
@@ -134,13 +142,13 @@ function PaymentSuccessPage({
             </span>
             {!isPro && (
               <span style={{ fontSize: '12px', color: 'var(--tx3)' }}>
-                Attempt {attempts}/10
+                Attempt {attempts}/5
               </span>
             )}
           </div>
           
           <div style={{ fontSize: '13px', color: 'var(--tx2)' }}>
-            User ID: <code style={{ color: 'var(--tx)', background: 'var(--bg2)', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace' }}>{clerkUser?.id || 'Not signed in'}</code>
+            User ID: <code style={{ color: 'var(--tx)', background: 'var(--bg2)', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace' }}>{clerkUser?.uid || 'Not signed in'}</code>
           </div>
         </div>
 
@@ -154,49 +162,21 @@ function PaymentSuccessPage({
               >
                 ⚡ Go to Home Page
               </button>
-              <button
-                onClick={() => navigate('/dev-dashboard')}
-                style={{ padding: '12px 32px', fontSize: '14px', borderRadius: '12px', width: '100%', background: 'transparent', border: '1px solid var(--br)', color: 'var(--tx2)', cursor: 'pointer' }}
-              >
-                📊 Open Developer Dashboard
-              </button>
             </>
           ) : (
-            <>
-              <button
-                onClick={handleManualCheck}
-                disabled={checking}
-                className="btn-p"
-                style={{ padding: '14px 32px', fontSize: '16px', borderRadius: '12px', width: '100%', opacity: checking ? 0.7 : 1 }}
-              >
-                {checking ? 'Checking Status...' : '🔄 Sync Purchase Status'}
-              </button>
-              
-              {clerkUser?.id && (
-                <button
-                  onClick={handleManualActivate}
-                  disabled={checking || manualSuccess}
-                  style={{ 
-                    padding: '12px 32px', 
-                    fontSize: '14px', 
-                    borderRadius: '12px', 
-                    width: '100%', 
-                    background: 'rgba(34,211,238,0.1)', 
-                    border: '1px dashed var(--cy)', 
-                    color: 'var(--cy)', 
-                    cursor: 'pointer',
-                    marginTop: '8px'
-                  }}
-                >
-                  🚀 (Test Mode) Manually Activate Pro Instantly
-                </button>
-              )}
-            </>
+            <button
+              onClick={handleManualCheck}
+              disabled={checking}
+              className="btn-p"
+              style={{ padding: '14px 32px', fontSize: '16px', borderRadius: '12px', width: '100%', opacity: checking ? 0.7 : 1 }}
+            >
+              {checking ? 'Checking Status...' : '🔄 Sync Purchase Status'}
+            </button>
           )}
         </div>
 
         <p style={{ marginTop: '24px', fontSize: '12px', color: 'var(--tx3)' }}>
-          If you run into issues, please try logging out and logging back in to force-refresh your Clerk session.
+          If you run into issues, please try logging out and logging back in to refresh your session.
         </p>
       </div>
     </div>

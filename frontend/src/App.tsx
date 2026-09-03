@@ -1,15 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { Analytics } from '@vercel/analytics/react';
-import {
-  useUser,
-  useAuth,
-  SignInButton,
-  UserButton
-} from '@clerk/clerk-react';
 import './App.css';
+import logoImg from './assets/logo.png';
 import { API_BASE } from './types';
 import type { UserSettings, License } from './types';
+import { GoogleAuthButton, GoogleIcon } from './components/GoogleAuthButton';
+import { useFirebaseAuth } from './context/FirebaseAuthContext';
+export { GoogleIcon };
 
 // Page imports
 import LandingPage from './pages/LandingPage';
@@ -40,23 +38,10 @@ function AppContent() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Clerk hooks (safely handle when ClerkProvider is not present)
-  let clerkUser: any = null;
-  let clerkIsLoaded = true;
-  let clerkIsSignedIn = false;
-  let clerkGetToken: (() => Promise<string | null>) | null = null;
-  let clerkEnabled = true;
-  try {
-    const { user, isLoaded } = useUser();
-    const { isSignedIn, getToken } = useAuth();
-    clerkUser = user;
-    clerkIsLoaded = isLoaded;
-    clerkIsSignedIn = !!isSignedIn;
-    clerkGetToken = getToken;
-  } catch (_) {
-    // ClerkProvider not mounted — auth features disabled
-    clerkEnabled = false;
-  }
+  // Firebase Auth hook
+  const { user, isLoaded: clerkIsLoaded, isSignedIn: clerkIsSignedIn, signOut: firebaseSignOut, getIdToken: clerkGetToken } = useFirebaseAuth();
+  const clerkUser = user;
+  const clerkEnabled = true;
 
   // User details & License keys
   const [userId, setUserId] = useState<string>('');
@@ -179,7 +164,7 @@ function AppContent() {
   useEffect(() => {
     if (!clerkIsLoaded) return;
     if (clerkIsSignedIn && clerkUser) {
-      setUserId(clerkUser.id);
+      setUserId(clerkUser.uid);
     } else {
       const storedUserId = localStorage.getItem('hc_user_id');
       const storedToken = localStorage.getItem('hc_guest_token');
@@ -264,29 +249,28 @@ function AppContent() {
           const token = await clerkGetToken();
           if (token) {
             if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-              chrome.runtime.sendMessage(
-                targetExtId,
-                {
-                  type: 'INSTANT_CURRENCY_CLERK_SESSION',
-                  token: token,
-                  user: {
-                    id: clerkUser.id,
-                    email: clerkUser.primaryEmailAddress?.emailAddress
-                  },
-                  subscription: {
-                    active: isPro,
-                    status: isPro ? 'active' : 'inactive',
-                    plan_type: isPro ? 'pro_lifetime' : 'free'
-                  }
+              const sessionPayload = {
+                type: 'INSTANT_CURRENCY_FIREBASE_SESSION',
+                token: token,
+                user: {
+                  id: clerkUser.uid,
+                  email: clerkUser.email
                 },
-                (response: any) => {
-                  if (chrome.runtime.lastError) {
-                    console.warn('Extension sync failed (expected if not installed/configured):', chrome.runtime.lastError.message);
-                  } else {
-                    console.log('Synced session to Chrome Extension.', response);
-                  }
+                subscription: {
+                  active: isPro,
+                  status: isPro ? 'active' : 'inactive',
+                  plan_type: isPro ? 'pro_lifetime' : 'free'
                 }
-              );
+              };
+              chrome.runtime.sendMessage(targetExtId, sessionPayload, (response: any) => {
+                if (chrome.runtime.lastError) {
+                  console.warn('Extension sync failed (expected if not installed/configured):', chrome.runtime.lastError.message);
+                } else {
+                  console.log('Synced session to Chrome Extension.', response);
+                }
+              });
+              // Also send with legacy type for extension compatibility
+              chrome.runtime.sendMessage(targetExtId, { ...sessionPayload, type: 'INSTANT_CURRENCY_CLERK_SESSION' });
             }
           }
         } else {
@@ -389,12 +373,12 @@ function AppContent() {
         description = 'Access developer options, api keys, and usage statistics for HoverConvert Pro.';
         break;
       case '/pricing':
-        title = 'Get HoverConvert Pro – Lifetime Access | HoverConvert';
-        description = 'Upgrade to HoverConvert Pro to unlock offline conversions, custom markups, unlimited daily usage, and more.';
+        title = 'Get HoverConvert Pro – 3 Months Access | HoverConvert';
+        description = 'Upgrade to HoverConvert Pro to unlock offline conversions, custom markups, unlimited daily usage, and more for 3 months.';
         break;
       case '/payment-success':
         title = 'Payment Successful | HoverConvert';
-        description = 'Thank you for upgrading to HoverConvert Pro! Your premium lifetime license is now activated.';
+        description = 'Thank you for upgrading to HoverConvert Pro! Your premium 3-month access is now activated.';
         break;
       case '/payment-failed':
         title = 'Payment Failed | HoverConvert';
@@ -560,7 +544,9 @@ function AppContent() {
       {/* FLOAT NAV BAR */}
       <nav id="navbar" style={{ background: navScrolled || path !== '/' ? 'rgba(6,8,14,0.94)' : 'rgba(6,8,14,0.75)' }}>
         <a onClick={() => handleNavigate('/')} className="logo" style={{ cursor: 'pointer' }}>
-          <div className="logo-mark"><img src="/logo.png" alt="HoverConvert Logo" /></div>HoverConvert
+          <div className="logo-mark">
+            <img src={logoImg || "/logo.png"} alt="HoverConvert Logo" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+          </div>HoverConvert
         </a>
 
         {path === '/' ? (
@@ -636,19 +622,30 @@ function AppContent() {
               )}
             </>
           )}
-          {/* Clerk UserButton or Sign In */}
-          {clerkEnabled && clerkIsLoaded && (
-            clerkIsSignedIn ? (
-              <div style={{ display: 'flex', alignItems: 'center' }}>
-                <UserButton afterSignOutUrl="/" />
-              </div>
-            ) : (
-              <SignInButton mode={window.innerWidth < 768 ? "redirect" : "modal"} forceRedirectUrl={path === '/pricing' ? '/pricing' : undefined}>
-                <button className="nav-secondary-btn" style={{ padding: '7px 14px', fontSize: '13px' }}>
-                  Sign In
-                </button>
-              </SignInButton>
-            )
+          {/* Firebase User Profile or Sign In */}
+          {clerkIsSignedIn && clerkIsLoaded ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              {user?.photoURL ? (
+                <img
+                  src={user.photoURL}
+                  alt={user.displayName || user.email || 'User'}
+                  style={{ width: '32px', height: '32px', borderRadius: '50%', border: '2px solid var(--cy)' }}
+                  title={user.displayName || user.email || ''}
+                />
+              ) : (
+                <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--vi), var(--cy))', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '14px' }}>
+                  {(user?.displayName || user?.email || 'U').charAt(0).toUpperCase()}
+                </div>
+              )}
+              <button
+                onClick={() => firebaseSignOut()}
+                style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '6px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px' }}
+              >
+                Sign Out
+              </button>
+            </div>
+          ) : (
+            <GoogleAuthButton forceRedirectUrl={path === '/pricing' ? '/pricing' : undefined} />
           )}
           <button className="hbg" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>☰</button>
         </div>
@@ -671,6 +668,14 @@ function AppContent() {
               <li><a onClick={() => { handleNavigate('/currency-converter'); setMobileMenuOpen(false); }}>🧮 Currency Converter</a></li>
               <li><a onClick={() => { handleNavigate('/live-exchange-rates'); setMobileMenuOpen(false); }}>📈 Live Exchange Rates</a></li>
               <li><a onClick={() => { handleNavigate('/support'); setMobileMenuOpen(false); }}>⚡ Help & Support</a></li>
+              {clerkEnabled && !clerkIsSignedIn && (
+                <li>
+                  <GoogleAuthButton
+                    style={{ color: 'var(--cy)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}
+                    onClick={() => setMobileMenuOpen(false)}
+                  />
+                </li>
+              )}
               {isPro ? (
                 <li><a onClick={() => { handleNavigate('/dev-dashboard'); setMobileMenuOpen(false); }}>📊 Pro Dashboard</a></li>
               ) : (
@@ -683,6 +688,15 @@ function AppContent() {
               <li><a onClick={() => { handleNavigate('/currency-converter'); setMobileMenuOpen(false); }}>Currency Converter</a></li>
               <li><a onClick={() => { handleNavigate('/live-exchange-rates'); setMobileMenuOpen(false); }}>Live Exchange Rates</a></li>
               <li><a onClick={() => { handleNavigate('/support'); setMobileMenuOpen(false); }}>Help & Support</a></li>
+              {clerkEnabled && !clerkIsSignedIn && (
+                <li>
+                  <GoogleAuthButton
+                    style={{ color: 'var(--cy)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}
+                    onClick={() => setMobileMenuOpen(false)}
+                    forceRedirectUrl={path === '/pricing' ? '/pricing' : undefined}
+                  />
+                </li>
+              )}
               {isPro && <li><a onClick={() => { handleNavigate('/dev-dashboard'); setMobileMenuOpen(false); }}>Developer Dashboard</a></li>}
               {!isPro && <li><a onClick={() => { setShowLicenseModal(true); setMobileMenuOpen(false); }}>🔑 Activate Pro</a></li>}
             </>
@@ -753,7 +767,9 @@ function AppContent() {
         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: '30px', width: '100%', marginBottom: '30px', borderBottom: '1px solid var(--br)', paddingBottom: '30px' }}>
           <div style={{ textAlign: 'left' }}>
             <a onClick={() => handleNavigate('/')} className="logo" style={{ cursor: 'pointer', marginBottom: '10px' }}>
-              <div className="logo-mark"><img src="/logo.png" alt="HoverConvert Logo" /></div>HoverConvert
+              <div className="logo-mark">
+                <img src={logoImg || "/logo.png"} alt="HoverConvert Logo" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+              </div>HoverConvert
             </a>
             <p style={{ fontSize: '12px', color: 'var(--tx2)', maxWidth: '280px', marginTop: '10px' }}>
               Instant currency conversion tool. Hover over any amount on any page and get real-time exchange rates instantly.

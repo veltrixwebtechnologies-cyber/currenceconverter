@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { trackEvent } from '../types';
+import extensionPreviewImg from '../assets/extension_preview.png';
 
 interface LandingProps {
   isPro: boolean;
@@ -322,7 +323,7 @@ function LandingPage({ isPro }: LandingProps) {
       <div style={{ display: 'flex', justifyContent: 'center', width: '100%', padding: '0 20px', boxSizing: 'border-box', marginBottom: '80px' }}>
         <div style={{ maxWidth: '800px', width: '100%', position: 'relative', borderRadius: '16px', overflow: 'hidden', border: '1px solid var(--br)', boxShadow: '0 20px 50px rgba(0,0,0,0.3)', background: 'var(--bg2)' }}>
           <img 
-            src="/extension_preview.png" 
+            src={extensionPreviewImg || "/extension_preview.png"} 
             alt="HoverConvert - Instant Currency Converter Chrome extension tooltip in action converting USD prices to INR on Amazon" 
             width={1024}
             height={1024}
@@ -639,7 +640,7 @@ function LandingPage({ isPro }: LandingProps) {
             <div className="pbadge">Best Value</div>
             <div className="pname">Pro Plan</div>
             <div className="pprice">$4.99</div>
-            <div className="pterm">One-time · Lifetime access</div>
+            <div className="pterm">3 Months Access · Pay once</div>
             <ul className="pfeat">
               <li>Unlimited conversions</li>
               <li>160+ currencies</li>
@@ -651,7 +652,7 @@ function LandingPage({ isPro }: LandingProps) {
             </ul>
             {isPro ? (
               <div style={{ textAlign: 'center', padding: '13px', borderRadius: '12px', background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.3)', color: 'var(--cy)', fontWeight: 700, fontSize: '15px' }}>
-                ✓ Current Plan (Lifetime Active)
+                ✓ Current Plan (3 Months Active)
               </div>
             ) : (
               <button onClick={() => { trackEvent('cta_pricing_explore', { plan: 'pro' }); navigate('/pricing'); }} className="pbtn pbtn-p">
@@ -789,7 +790,7 @@ function FAQSection() {
     { q: 'Is my browsing data stored or shared?', a: 'Absolutely not. HoverConvert is fully local. It reads page content to detect prices, but sends zero data to any server. Your browsing history is completely private.' },
     { q: 'How often are exchange rates updated?', a: 'Rates refresh every 6 hours via a lightweight sync. You can also set a manual rate in extension settings for your bank\'s exact conversion rate.' },
     { q: 'Can I customize which currencies are converted?', a: 'Yes. HoverConvert allows you to set your default native currency, select favorite target currencies, and even define manual conversion overrides in settings.' },
-    { q: 'How does the license key activation work?', a: 'After a one-time purchase of Pro, you\'ll receive a license key via email. Simply input the key in the "Activate Pro" window to unlock all Pro capabilities for lifetime usage.' },
+    { q: 'How does the license key activation work?', a: 'After purchasing Pro, your account is upgraded automatically. Log into the extension with your account to unlock all Pro capabilities for 3 months of unlimited usage.' },
     { q: 'Is there a refund policy?', a: 'Yes. No-questions-asked 30-day full refund. If it doesn\'t work the way you expected, just reach out and we\'ll process it immediately.' }
   ];
 

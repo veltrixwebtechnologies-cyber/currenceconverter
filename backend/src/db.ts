@@ -55,11 +55,21 @@ export interface UserSubscription {
   updatedAt: string;
 }
 
+export interface ExchangeRatesSnapshot {
+  base: string;
+  rates: Record<string, number>;
+  fetchedAt: string;
+  expiresAt: string;
+  stale: boolean;
+  provider: 'openexchangerates' | 'open_er_api' | 'cached_snapshot' | 'fallback_static';
+}
+
 interface DBData {
   settings: Record<string, UserSettings>;
   licenses: Record<string, License>;
   feedback: Feedback[];
   subscriptions: Record<string, UserSubscription>;
+  exchangeRates?: ExchangeRatesSnapshot | null;
 }
 
 const DEFAULT_SETTINGS = (userId: string): UserSettings => ({
@@ -75,7 +85,8 @@ const initialData: DBData = {
   settings: {},
   licenses: {},
   feedback: [],
-  subscriptions: {}
+  subscriptions: {},
+  exchangeRates: null
 };
 
 // Local File Helpers
@@ -482,6 +493,48 @@ export const db = {
       const data = readDB();
       const found = Object.values(data.subscriptions || {}).find((s: any) => s.email && s.email.toLowerCase() === email.toLowerCase() && s.premium);
       return !!found;
+    }
+  },
+
+  getExchangeRatesSnapshot: async (): Promise<ExchangeRatesSnapshot | null> => {
+    if (useVercelKV) {
+      try {
+        return await kv.get<ExchangeRatesSnapshot>('hc:exchange_rates');
+      } catch (error) {
+        console.error('KV getExchangeRatesSnapshot error', error);
+        return null;
+      }
+    } else if (redisClient) {
+      try {
+        const val = await redisClient.get('hc:exchange_rates');
+        return val ? JSON.parse(val) : null;
+      } catch (error) {
+        console.error('Redis getExchangeRatesSnapshot error', error);
+        return null;
+      }
+    } else {
+      const data = readDB();
+      return data.exchangeRates || null;
+    }
+  },
+
+  saveExchangeRatesSnapshot: async (snapshot: ExchangeRatesSnapshot): Promise<void> => {
+    if (useVercelKV) {
+      try {
+        await kv.set('hc:exchange_rates', snapshot);
+      } catch (error) {
+        console.error('KV saveExchangeRatesSnapshot error', error);
+      }
+    } else if (redisClient) {
+      try {
+        await redisClient.set('hc:exchange_rates', JSON.stringify(snapshot));
+      } catch (error) {
+        console.error('Redis saveExchangeRatesSnapshot error', error);
+      }
+    } else {
+      const data = readDB();
+      data.exchangeRates = snapshot;
+      writeDB(data);
     }
   }
 };

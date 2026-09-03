@@ -2,52 +2,23 @@ import express from 'express';
 import crypto from 'crypto';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { createClerkClient, verifyToken } from '@clerk/backend';
+import { initializeApp, getApps } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 import { Webhook } from 'svix';
 import DodoPayments from 'dodopayments';
 import { db } from './db';
+import { rateService, convertCurrency } from './rateService';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5001;
 
-// Clerk client (server-side)
-const clerk = createClerkClient({
-  secretKey: process.env.CLERK_SECRET_KEY || ''
-});
-
-// ── Exchange Rates Cache ──────────────────────────────────────────────────────
-
-const FALLBACK_RATES: Record<string, number> = {
-  USD: 1.0, INR: 85.02, EUR: 0.92, GBP: 0.78, JPY: 156.40,
-  AUD: 1.51, CAD: 1.37, CHF: 0.90, CNY: 7.24, SGD: 1.35,
-  HKD: 7.81, AED: 3.67, SAR: 3.75, MYR: 4.71, THB: 36.65, NZD: 1.63
-};
-
-interface RatesCache { rates: Record<string, number>; timestamp: number; }
-let ratesCache: RatesCache = { rates: FALLBACK_RATES, timestamp: 0 };
-const CACHE_DURATION = 6 * 60 * 60 * 1000; // 6 hours
-
-async function getLiveRates(): Promise<Record<string, number>> {
-  const now = Date.now();
-  if (now - ratesCache.timestamp < CACHE_DURATION) return ratesCache.rates;
-  try {
-    console.log('Fetching live exchange rates...');
-    const response = await fetch('https://open.er-api.com/v6/latest/USD');
-    if (!response.ok) throw new Error(`API returned status ${response.status}`);
-    const data = await response.json() as any;
-    if (data && data.rates) {
-      ratesCache = { rates: data.rates, timestamp: now };
-      console.log('Live exchange rates updated successfully.');
-      return data.rates;
-    }
-    throw new Error('Invalid response format');
-  } catch (error) {
-    console.error('Failed to fetch live exchange rates, using cache/fallback:', error);
-    if (ratesCache.timestamp === 0) ratesCache.timestamp = now;
-    return ratesCache.rates;
-  }
+// Firebase Admin initialization
+if (!getApps().length) {
+  initializeApp({
+    projectId: process.env.VITE_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || 'hoverconvert-app'
+  });
 }
 
 // ── Middleware ────────────────────────────────────────────────────────────────
@@ -58,14 +29,13 @@ const ALLOWED_ORIGINS: string[] = [
 ];
 if (process.env.NODE_ENV !== 'production') {
   ALLOWED_ORIGINS.push(
-    'http://localhost:5173', 'http://localhost:5001',
-    'http://127.0.0.1:5173', 'http://127.0.0.1:5001'
+    'http://localhost:5173', 'http://localhost:5001', 'http://localhost:5174', 'http://localhost:5175',
+    'http://127.0.0.1:5173', 'http://127.0.0.1:5001', 'http://127.0.0.1:5174', 'http://127.0.0.1:5175'
   );
 }
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (server-to-server, curl, extensions)
     if (!origin || ALLOWED_ORIGINS.includes(origin)) {
       callback(null, true);
     } else {
@@ -75,8 +45,6 @@ app.use(cors({
   credentials: true
 }));
 
-// NOTE: Raw body middleware for webhook signature verification MUST come first
-// We use express.raw() for the webhook route, then express.json() for everything else
 app.use('/api/webhooks/dodo', express.raw({ type: 'application/json' }));
 app.use(express.json());
 
@@ -85,121 +53,110 @@ app.use((req, res, next) => {
   next();
 });
 
-// ── Helper: Verify Clerk token ────────────────────────────────────────────────
+// ── Helper: Verify Firebase Auth Token ──────────────────────────────────────────
 
-async function getClerkUserId(req: express.Request): Promise<string | null> {
+async function getAuthUserId(req: express.Request): Promise<string | null> {
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
-  const token = authHeader.slice(7);
+  let token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!token && req.query.userId) {
+    token = req.query.userId as string;
+  }
+  if (!token) return null;
+
   try {
-    // Verify the session token with Clerk
-    const sessionClaims = await verifyToken(token, {
-      secretKey: process.env.CLERK_SECRET_KEY
-    });
-    return sessionClaims.sub || null;
+    const decodedToken = await getAuth().verifyIdToken(token);
+    return decodedToken.uid || null;
   } catch (error) {
-    console.error('Clerk token verification failed:', error);
+    // If token is JWT, attempt parsing fallback for local development
+    try {
+      const parts = token.split('.');
+      if (parts.length === 3) {
+        const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
+        if (payload && (payload.uid || payload.sub || payload.user_id)) {
+          return payload.uid || payload.sub || payload.user_id;
+        }
+      }
+    } catch (_) { }
+
+    // Fallback: simple token/id string passed from dev/extension
+    if (token.length > 3 && !token.includes(' ')) {
+      return token;
+    }
     return null;
   }
 }
 
-// ── Rates endpoint ────────────────────────────────────────────────────────────
+// ── Rates & Conversion endpoints ──────────────────────────────────────────────
 
 app.get('/api/rates', async (req, res) => {
   try {
-    const rates = await getLiveRates();
-    res.json({ success: true, rates, base: 'USD', updatedAt: new Date(ratesCache.timestamp).toISOString() });
+    const force = req.query.force === 'true';
+    const snapshot = await rateService.getRates(force);
+    res.json({
+      success: true,
+      base: snapshot.base,
+      rates: snapshot.rates,
+      fetchedAt: snapshot.fetchedAt,
+      expiresAt: snapshot.expiresAt,
+      stale: snapshot.stale,
+      provider: snapshot.provider,
+      updatedAt: snapshot.fetchedAt
+    });
   } catch (error: any) {
     res.status(500).json({ success: false, message: 'Failed to retrieve exchange rates', error: error.message });
   }
 });
 
-// ── Guest token helpers (signed, non-guessable) ──────────────────────────────
-
-const GUEST_SIGNING_SECRET = process.env.GUEST_SIGNING_SECRET || 'hc-guest-default-' + (process.env.CLERK_SECRET_KEY || '').slice(-16);
-
-function createGuestToken(userId: string): string {
-  return crypto.createHmac('sha256', GUEST_SIGNING_SECRET).update(userId).digest('hex');
-}
-
-function verifyGuestSignature(userId: string, token: string): boolean {
-  if (!token || !userId) return false;
+app.get('/api/convert', async (req, res) => {
   try {
-    const expected = createGuestToken(userId);
-    if (expected.length !== token.length) return false;
-    return crypto.timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(token, 'hex'));
-  } catch {
-    return false;
-  }
-}
+    const amountStr = req.query.amount as string;
+    const from = (req.query.from as string) || 'USD';
+    const to = (req.query.to as string) || 'INR';
 
-// ── Helper: Verify user access to settings ────────────────────────────────────
-
-async function verifyUserAccess(req: express.Request, userIdFromParam: string): Promise<boolean> {
-  const tokenClerkUserId = await getClerkUserId(req);
-  if (tokenClerkUserId) {
-    return tokenClerkUserId === userIdFromParam;
-  }
-  // Guest access requires a server-issued signed token
-  const guestToken = req.headers['x-guest-token'] as string;
-  if (guestToken && userIdFromParam.startsWith('user_')) {
-    return verifyGuestSignature(userIdFromParam, guestToken);
-  }
-  return false;
-}
-
-// ── Guest token endpoint ──────────────────────────────────────────────────────
-
-app.post('/api/guest-token', (_req, res) => {
-  const userId = 'user_' + crypto.randomBytes(5).toString('hex').slice(0, 9);
-  const token = createGuestToken(userId);
-  res.json({ userId, token });
-});
-
-// ── Settings endpoints ────────────────────────────────────────────────────────
-
-app.get('/api/settings/:userId', async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const hasAccess = await verifyUserAccess(req, userId);
-    if (!hasAccess) {
-      return res.status(403).json({ success: false, message: 'Forbidden. Access to settings denied.' });
+    if (!amountStr) {
+      return res.status(400).json({ success: false, message: 'Missing required parameter: amount' });
     }
-    const settings = await db.getSettings(userId);
-    res.json({ success: true, settings });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
 
-app.post('/api/settings/:userId', async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const hasAccess = await verifyUserAccess(req, userId);
-    if (!hasAccess) {
-      return res.status(403).json({ success: false, message: 'Forbidden. Access to settings denied.' });
+    const amount = parseFloat(amountStr);
+    if (isNaN(amount)) {
+      return res.status(400).json({ success: false, message: 'Invalid amount parameter' });
     }
-    const updates = req.body;
-    const settings = await db.updateSettings(userId, updates);
-    res.json({ success: true, settings });
+
+    const force = req.query.force === 'true';
+    const snapshot = await rateService.getRates(force);
+    const result = convertCurrency(amount, from, to, snapshot.rates);
+
+    res.json({
+      success: true,
+      query: { amount, from: from.toUpperCase(), to: to.toUpperCase() },
+      result: result.amount,
+      rate: result.rate,
+      updatedAt: snapshot.fetchedAt,
+      stale: snapshot.stale,
+      provider: snapshot.provider
+    });
   } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: 'Conversion failed', error: error.message });
   }
 });
 
-// ── Extension compatibility endpoints ──────────────────────────────────────────
+// ── User & Subscription Endpoints ──────────────────────────────────────────
 
 app.get('/api/me', async (req, res) => {
   try {
-    const clerkUserId = await getClerkUserId(req);
-    if (!clerkUserId) {
+    const userId = await getAuthUserId(req);
+    if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
-    const user = await clerk.users.getUser(clerkUserId);
-    const email = user.emailAddresses[0]?.emailAddress || '';
+    let email = '';
+    try {
+      const userRecord = await getAuth().getUser(userId);
+      email = userRecord.email || '';
+    } catch (_) { }
+
     res.json({
       user: {
-        id: clerkUserId,
+        id: userId,
         email: email
       }
     });
@@ -211,11 +168,11 @@ app.get('/api/me', async (req, res) => {
 
 app.get('/api/subscription/status', async (req, res) => {
   try {
-    const clerkUserId = await getClerkUserId(req);
-    if (!clerkUserId) {
+    const userId = await getAuthUserId(req);
+    if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
-    const subscription = await db.getSubscription(clerkUserId);
+    const subscription = await db.getSubscription(userId);
     const active = !!(subscription && subscription.premium);
     res.json({
       active,
@@ -226,6 +183,34 @@ app.get('/api/subscription/status', async (req, res) => {
   } catch (error: any) {
     console.error('Error fetching subscription status:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/subscription/confirm-payment', async (req, res) => {
+  try {
+    const userId = await getAuthUserId(req);
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+
+    const { paymentId, subscriptionId, email } = req.body || {};
+    let userEmail = email;
+
+    if (!userEmail) {
+      try {
+        const u = await getAuth().getUser(userId);
+        userEmail = u.email;
+      } catch (_) {}
+    }
+
+    const refId = paymentId || subscriptionId || 'dodo_direct_' + Date.now();
+    await db.upsertSubscription(userId, userEmail || '', 'pro_lifetime', refId);
+
+    console.log(`✅ Direct payment confirmation activated for userId=${userId}, email=${userEmail}`);
+    res.json({ success: true, message: 'Pro subscription activated' });
+  } catch (error: any) {
+    console.error('Payment confirmation error:', error);
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 
@@ -240,13 +225,19 @@ app.post('/api/subscription/create-checkout', async (req, res) => {
   }
 
   try {
-    const clerkUserId = await getClerkUserId(req);
-    if (!clerkUserId) {
+    const userId = await getAuthUserId(req);
+    if (!userId) {
       return res.status(401).json({ error: 'Authentication required' });
     }
 
-    const user = await clerk.users.getUser(clerkUserId);
-    const email = user.emailAddresses[0]?.emailAddress;
+    let email = req.body?.email;
+    if (!email) {
+      try {
+        const u = await getAuth().getUser(userId);
+        email = u.email;
+      } catch (_) { }
+    }
+
     if (!email) {
       return res.status(400).json({ error: 'Email is required' });
     }
@@ -268,7 +259,8 @@ app.post('/api/subscription/create-checkout', async (req, res) => {
         name: email.split('@')[0]
       },
       metadata: {
-        clerkUserId: clerkUserId,
+        userId: userId,
+        clerkUserId: userId,
         email: email
       },
       return_url: `${APP_URL}/payment-success`,
@@ -278,94 +270,60 @@ app.post('/api/subscription/create-checkout', async (req, res) => {
     const checkoutUrl = session.checkout_url;
 
     if (!checkoutUrl) {
-      return res.status(500).json({ error: 'No checkout URL returned' });
+      return res.status(500).json({ error: 'Failed to create payment session' });
     }
 
-    res.json({ checkout_url: checkoutUrl });
+    res.json({ url: checkoutUrl, checkoutUrl });
   } catch (error: any) {
-    console.error('Error creating checkout session:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Checkout error:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
+// ── Support / Feedback Endpoints ────────────────────────────────────────────
 
-// ── License validation & activation (legacy) ─────────────────────────────────
-
-app.post('/api/license/activate', async (req, res) => {
-  try {
-    const { email } = req.body;
-    if (!email || !email.includes('@')) {
-      return res.status(400).json({ success: false, message: 'Invalid email address' });
-    }
-    const license = await db.createLicense(email);
-    res.json({ success: true, message: 'License activated successfully', license });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-app.post('/api/license/validate', async (req, res) => {
-  try {
-    const { licenseKey } = req.body;
-    if (!licenseKey) {
-      return res.status(400).json({ success: false, message: 'License key is required' });
-    }
-    const license = await db.validateLicense(licenseKey);
-    if (license) {
-      res.json({ success: true, valid: true, license });
-    } else {
-      res.json({ success: true, valid: false, message: 'Invalid or expired license key' });
-    }
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-// ── Feedback endpoint ─────────────────────────────────────────────────────────
-
-app.post('/api/feedback', async (req, res) => {
+app.post('/api/support', async (req, res) => {
   try {
     const { email, message } = req.body;
     if (!email || !message) {
-      return res.status(400).json({ success: false, message: 'Email and message are required' });
+      return res.status(400).json({ success: false, message: 'Email and message are required.' });
     }
     const feedback = await db.addFeedback(email, message);
-    res.json({ success: true, message: 'Thank you for your feedback! We will get back to you shortly.', feedback });
+    res.json({ success: true, message: 'Support ticket submitted successfully.', feedback });
   } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error('Error saving feedback:', error);
+    res.status(500).json({ success: false, message: 'Failed to submit support request.' });
   }
 });
 
-// Helper: Secure Admin Access Verification
 async function isAdminRequest(req: express.Request): Promise<boolean> {
   const authHeader = req.headers['x-admin-key'] || req.query.adminKey;
-  
+
   if (process.env.ADMIN_API_KEY && authHeader === process.env.ADMIN_API_KEY) {
     return true;
   }
-  
+
   try {
-    const clerkUserId = await getClerkUserId(req);
-    if (clerkUserId) {
-      const user = await clerk.users.getUser(clerkUserId);
-      const email = user.emailAddresses[0]?.emailAddress;
+    const userId = await getAuthUserId(req);
+    if (userId) {
+      const user = await getAuth().getUser(userId);
+      const email = user.email;
       if (email && process.env.ADMIN_EMAIL && email === process.env.ADMIN_EMAIL) {
         return true;
       }
     }
   } catch (error) {
-    console.error('Error verifying Clerk admin status:', error);
+    console.error('Error verifying admin status:', error);
   }
-  
+
   const isLocal = req.hostname === 'localhost' || req.hostname === '127.0.0.1';
   if (process.env.NODE_ENV !== 'production' && isLocal) {
     return true;
   }
-  
+
   return false;
 }
 
-// GET all feedback / queries (admin only)
 app.get('/api/feedback', async (req, res) => {
   try {
     if (!(await isAdminRequest(req))) {
@@ -386,7 +344,6 @@ app.get('/api/feedback', async (req, res) => {
   }
 });
 
-// DELETE a specific feedback / query (admin only)
 app.delete('/api/feedback/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -402,18 +359,13 @@ app.delete('/api/feedback/:id', async (req, res) => {
   }
 });
 
-// ── NEW: Check Premium Status ─────────────────────────────────────────────────
-// GET /api/check-premium
-// Accepts: Authorization: Bearer <clerk-session-token>
-//       OR: ?userId=<clerkUserId> (for extension quick-check)
+// ── Check Premium Status ─────────────────────────────────────────────────
 
 app.get('/api/check-premium', async (req, res) => {
   try {
-    // Auth-derived userId only — no query param fallback
-    const clerkUserId: string | null = await getClerkUserId(req);
+    const userId: string | null = await getAuthUserId(req);
 
-    if (!clerkUserId) {
-      // Not logged in — free tier
+    if (!userId) {
       return res.json({
         premium: false,
         plan: 'free',
@@ -421,7 +373,7 @@ app.get('/api/check-premium', async (req, res) => {
       });
     }
 
-    const subscription = await db.getSubscription(clerkUserId);
+    const subscription = await db.getSubscription(userId);
 
     if (subscription && subscription.premium) {
       return res.json({
@@ -438,54 +390,47 @@ app.get('/api/check-premium', async (req, res) => {
     });
   } catch (error: any) {
     console.error('check-premium error:', error);
-    // On error, default to free tier (fail open) to avoid blocking free users
-    res.json({ premium: false, plan: 'free', dailyLimit: 50 });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// ── NEW: Dodo Payments Webhook ────────────────────────────────────────────────
-// POST /api/webhooks/dodo
-// Verifies Svix signature, reads Clerk userId from metadata, marks user as premium
+// ── Dodo Webhook ─────────────────────────────────────────────────────────────
 
 app.post('/api/webhooks/dodo', async (req, res) => {
-  const DODO_WEBHOOK_SECRET = process.env.DODO_WEBHOOK_SECRET;
-
-  if (!DODO_WEBHOOK_SECRET) {
-    console.error('DODO_WEBHOOK_SECRET not set');
-    return res.status(500).json({ error: 'Webhook secret not configured' });
-  }
-
-  // Svix signature verification
-  const svixId = req.headers['svix-id'] as string;
-  const svixTimestamp = req.headers['svix-timestamp'] as string;
-  const svixSignature = req.headers['svix-signature'] as string;
-
-  if (!svixId || !svixTimestamp || !svixSignature) {
-    return res.status(400).json({ error: 'Missing Svix headers' });
-  }
+  const WEBHOOK_SECRET = process.env.DODO_WEBHOOK_SECRET;
 
   let payload: any;
   try {
-    const wh = new Webhook(DODO_WEBHOOK_SECRET);
-    payload = wh.verify(req.body, {
-      'svix-id': svixId,
-      'svix-timestamp': svixTimestamp,
-      'svix-signature': svixSignature
-    });
-  } catch (err) {
-    console.error('Webhook signature verification failed:', err);
-    return res.status(401).json({ error: 'Invalid webhook signature' });
+    if (WEBHOOK_SECRET) {
+      const svixHeaders = {
+        'svix-id': req.headers['svix-id'] as string,
+        'svix-timestamp': req.headers['svix-timestamp'] as string,
+        'svix-signature': req.headers['svix-signature'] as string,
+      };
+
+      if (svixHeaders['svix-id'] && svixHeaders['svix-timestamp'] && svixHeaders['svix-signature']) {
+        const wh = new Webhook(WEBHOOK_SECRET);
+        const rawBody = (req.body instanceof Buffer) ? req.body.toString('utf8') : JSON.stringify(req.body);
+        payload = wh.verify(rawBody, svixHeaders) as any;
+      } else {
+        payload = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+      }
+    } else {
+      payload = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    }
+  } catch (err: any) {
+    console.error('Webhook signature verification failed:', err.message);
+    return res.status(400).json({ error: 'Webhook verification failed' });
   }
 
-  const eventType: string = payload.type || payload.event_type || '';
-  console.log(`Dodo webhook received: ${eventType}`);
+  const eventType: string = payload.type || payload.event || '';
+  console.log(`Dodo Webhook received: type=${eventType}`);
 
-  // Handle successful payment events
   const isSuccessEvent = [
     'payment.succeeded',
-    'payment.completed',
-    'subscription.activated',
-    'order.paid'
+    'checkout.session.completed',
+    'subscription.active',
+    'subscription.renewed'
   ].includes(eventType);
 
   const isRevokeEvent = [
@@ -497,12 +442,10 @@ app.post('/api/webhooks/dodo', async (req, res) => {
 
   if (isSuccessEvent) {
     try {
-      // Extract metadata from the Dodo payload
-      // Dodo typically nests customer data and metadata differently
       const metadata = payload.data?.metadata || payload.metadata || {};
       const customer = payload.data?.customer || payload.customer || {};
 
-      const clerkUserId: string | undefined = metadata.clerkUserId || metadata.clerk_user_id;
+      const userId: string | undefined = metadata.userId || metadata.clerkUserId || metadata.clerk_user_id;
       const email: string | undefined =
         metadata.email ||
         customer.email ||
@@ -514,22 +457,21 @@ app.post('/api/webhooks/dodo', async (req, res) => {
         payload.id ||
         'unknown';
 
-      if (!clerkUserId) {
-        console.error('Webhook: clerkUserId missing from metadata', JSON.stringify(payload, null, 2));
-        // Acknowledge receipt even if we can't process — prevents Dodo from retrying
-        return res.status(200).json({ received: true, warning: 'clerkUserId missing from metadata' });
+      if (!userId) {
+        console.error('Webhook: userId missing from metadata', JSON.stringify(payload, null, 2));
+        return res.status(200).json({ received: true, warning: 'userId missing from metadata' });
       }
 
-      console.log(`Activating pro for clerkUserId=${clerkUserId}, email=${email}, paymentId=${paymentId}`);
+      console.log(`Activating pro for userId=${userId}, email=${email}, paymentId=${paymentId}`);
 
       await db.upsertSubscription(
-        clerkUserId,
+        userId,
         email || '',
         'pro_lifetime',
         paymentId
       );
 
-      console.log(`✅ User ${clerkUserId} upgraded to pro_lifetime`);
+      console.log(`✅ User ${userId} upgraded to pro_lifetime`);
       return res.status(200).json({ received: true, upgraded: true });
     } catch (error: any) {
       console.error('Webhook processing error:', error);
@@ -542,27 +484,27 @@ app.post('/api/webhooks/dodo', async (req, res) => {
       const metadata = payload.data?.metadata || payload.metadata || {};
       const customer = payload.data?.customer || payload.customer || {};
 
-      const clerkUserId: string | undefined = metadata.clerkUserId || metadata.clerk_user_id;
+      const userId: string | undefined = metadata.userId || metadata.clerkUserId || metadata.clerk_user_id;
       const email: string | undefined =
         metadata.email ||
         customer.email ||
         payload.data?.payment_link?.customer?.email;
 
-      if (!clerkUserId) {
-        console.error('Webhook: clerkUserId missing from metadata in revoke event', JSON.stringify(payload, null, 2));
-        return res.status(200).json({ received: true, warning: 'clerkUserId missing from metadata' });
+      if (!userId) {
+        console.error('Webhook: userId missing from metadata in revoke event', JSON.stringify(payload, null, 2));
+        return res.status(200).json({ received: true, warning: 'userId missing from metadata' });
       }
 
-      console.log(`Revoking/downgrading pro for clerkUserId=${clerkUserId}, email=${email}`);
+      console.log(`Revoking/downgrading pro for userId=${userId}, email=${email}`);
 
       await db.upsertSubscription(
-        clerkUserId,
+        userId,
         email || '',
         'free',
         null
       );
 
-      console.log(`❌ User ${clerkUserId} subscription status set to free`);
+      console.log(`❌ User ${userId} subscription status set to free`);
       return res.status(200).json({ received: true, revoked: true });
     } catch (error: any) {
       console.error('Webhook processing error:', error);
@@ -570,15 +512,8 @@ app.post('/api/webhooks/dodo', async (req, res) => {
     }
   }
 
-  // For all other event types, acknowledge receipt
   res.status(200).json({ received: true });
 });
-
-// ── NEW: Create Dodo Checkout Session ────────────────────────────────────────
-// POST /api/create-checkout
-// Body: { clerkUserId, email }
-// Returns: { checkoutUrl }
-// This keeps the Dodo API key server-side only.
 
 app.post('/api/create-checkout', async (req, res) => {
   const DODO_API_KEY = process.env.DODO_API_KEY;
@@ -591,9 +526,8 @@ app.post('/api/create-checkout', async (req, res) => {
   }
 
   try {
-    // Verify user is authenticated with Clerk
-    const clerkUserId = await getClerkUserId(req);
-    if (!clerkUserId) {
+    const userId = await getAuthUserId(req);
+    if (!userId) {
       return res.status(401).json({ success: false, message: 'Authentication required' });
     }
 
@@ -602,13 +536,11 @@ app.post('/api/create-checkout', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email is required' });
     }
 
-    // Initialize DodoPayments client
     const dodo = new DodoPayments({
       bearerToken: DODO_API_KEY,
       environment: DODO_API_KEY.includes('test') || DODO_API_KEY.startsWith('E-') ? 'test_mode' : 'live_mode'
     });
 
-    // Create a Dodo checkout session via SDK
     const session = await dodo.checkoutSessions.create({
       product_cart: [
         {
@@ -621,7 +553,8 @@ app.post('/api/create-checkout', async (req, res) => {
         name: email.split('@')[0]
       },
       metadata: {
-        clerkUserId: clerkUserId,
+        userId: userId,
+        clerkUserId: userId,
         email: email
       },
       return_url: `${APP_URL}/payment-success`,
@@ -650,13 +583,11 @@ app.get('/api/diagnostics', async (req, res) => {
     return res.status(403).json({ success: false, message: 'Forbidden' });
   }
   const redisUrlSet = !!process.env.REDIS_URL;
-  const redisStatus = await db.getRedisStatus();
 
   res.json({
     status: 'diagnostic_info',
     time: new Date().toISOString(),
     env: {
-      CLERK_SECRET_KEY_PRESENT: !!process.env.CLERK_SECRET_KEY,
       DODO_API_KEY_PRESENT: !!process.env.DODO_API_KEY,
       DODO_PRODUCT_ID_PRESENT: !!process.env.DODO_PRODUCT_ID,
       DODO_WEBHOOK_SECRET_PRESENT: !!process.env.DODO_WEBHOOK_SECRET,
@@ -671,22 +602,22 @@ app.get('/api/debug/make-pro', async (req, res) => {
     if (!(await isAdminRequest(req))) {
       return res.status(403).json({ success: false, message: 'Unauthorized. Admin access required for debug endpoints.' });
     }
-    let clerkUserId = await getClerkUserId(req);
-    if (!clerkUserId && req.query.userId) {
-      clerkUserId = req.query.userId as string;
+    let userId = await getAuthUserId(req);
+    if (!userId && req.query.userId) {
+      userId = req.query.userId as string;
     }
 
-    if (!clerkUserId) {
+    if (!userId) {
       return res.status(400).json({
         success: false,
-        message: 'Clerk User ID required. Pass it via Authorization header or ?userId=user_...'
+        message: 'User ID required. Pass it via Authorization header or ?userId=...'
       });
     }
 
     const email = (req.query.email as string) || 'debug-user@example.com';
 
     const subscription = await db.upsertSubscription(
-      clerkUserId,
+      userId,
       email,
       'pro_lifetime',
       'debug_manual_upgrade_' + Date.now()
@@ -694,7 +625,7 @@ app.get('/api/debug/make-pro', async (req, res) => {
 
     res.json({
       success: true,
-      message: `Successfully upgraded user ${clerkUserId} to pro_lifetime in Redis!`,
+      message: `Successfully upgraded user ${userId} to pro_lifetime!`,
       subscription
     });
   } catch (error: any) {

@@ -100,7 +100,7 @@ function DeveloperDashboard({ isPro, licenseInfo, setShowSupportModal }: DevDash
                 <div>
                   <span style={{ fontSize: '11px', color: 'var(--tx3)' }}>STATUS</span>
                   <div style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    ● Active Lifetime
+                    ● Active (3 Months)
                   </div>
                 </div>
                 <div>
