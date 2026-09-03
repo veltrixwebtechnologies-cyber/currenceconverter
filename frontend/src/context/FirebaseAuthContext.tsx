@@ -71,9 +71,8 @@ export const FirebaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       // Provider missing in Firebase Console
       if (err?.code === 'auth/configuration-not-found' || err?.code === 'auth/operation-not-allowed') {
-        const errorMsg = 'Google Sign-in is not enabled in Firebase Console. Please go to Firebase Console -> Authentication -> Sign-in method and enable Google.';
+        const errorMsg = 'Google Sign-in is not enabled in Firebase Console. Please enable Google provider in Firebase Console.';
         console.error('[HoverConvert]', errorMsg, err);
-        alert(errorMsg);
         throw new Error(errorMsg);
       }
 
@@ -81,7 +80,6 @@ export const FirebaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
       if (err?.code === 'auth/unauthorized-domain') {
         const errorMsg = `Domain "${window.location.hostname}" is not authorized for Google Sign-In in Firebase Console. Please add "${window.location.hostname}" under Firebase Console -> Authentication -> Settings -> Authorized Domains.`;
         console.error('[HoverConvert]', errorMsg, err);
-        alert(errorMsg);
         throw new Error(errorMsg);
       }
 
@@ -99,7 +97,7 @@ export const FirebaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       // Catch-all
       const errorMsg = err?.message || 'Google Sign-In failed. Please try again.';
-      alert(`Google Sign-In Error: ${errorMsg}`);
+      console.error('[HoverConvert] Google Sign-In error:', err);
       throw err;
     }
   };
