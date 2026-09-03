@@ -4,6 +4,7 @@ import {
   googleProvider,
   signInWithPopup,
   signInWithRedirect,
+  getRedirectResult,
   firebaseSignOut,
   onAuthStateChanged,
   type User
@@ -32,6 +33,22 @@ export const FirebaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
 
   useEffect(() => {
+    // Process pending redirect auth result on mount
+    getRedirectResult(auth)
+      .then((result: any) => {
+        if (result?.user) {
+          setUser(result.user);
+        }
+      })
+      .catch((err: any) => {
+        console.error('[HoverConvert] Firebase redirect sign-in error:', err);
+        if (err?.code === 'auth/unauthorized-domain') {
+          alert(`Domain "${window.location.hostname}" is not authorized for Google Sign-In in Firebase Console. Please add "${window.location.hostname}" under Firebase Console -> Authentication -> Settings -> Authorized Domains.`);
+        } else if (err?.code === 'auth/configuration-not-found' || err?.code === 'auth/operation-not-allowed') {
+          alert('Google Sign-in is not enabled in Firebase Console. Please go to Firebase Console -> Authentication -> Sign-in method and enable Google.');
+        }
+      });
+
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setIsLoaded(true);
@@ -44,24 +61,46 @@ export const FirebaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const result = await signInWithPopup(auth, googleProvider);
       return result.user;
     } catch (err: any) {
-      if (err?.code === 'auth/configuration-not-found') {
+      console.warn('[HoverConvert] Popup sign-in notice:', err?.code, err?.message);
+
+      // User closed popup or cancelled request — do not attempt redirect fallback
+      if (err?.code === 'auth/popup-closed-by-user' || err?.code === 'auth/cancelled-popup-request') {
+        console.log('[HoverConvert] Google Sign-In cancelled by user.');
+        return null;
+      }
+
+      // Provider missing in Firebase Console
+      if (err?.code === 'auth/configuration-not-found' || err?.code === 'auth/operation-not-allowed') {
         const errorMsg = 'Google Sign-in is not enabled in Firebase Console. Please go to Firebase Console -> Authentication -> Sign-in method and enable Google.';
         console.error('[HoverConvert]', errorMsg, err);
         alert(errorMsg);
         throw new Error(errorMsg);
       }
 
-      console.warn('[HoverConvert] Popup sign-in warning, trying redirect:', err?.message || err);
-      try {
-        await signInWithRedirect(auth, googleProvider);
-        return null;
-      } catch (redirectErr: any) {
-        console.error('[HoverConvert] Firebase Google sign-in failed:', redirectErr);
-        if (redirectErr?.code === 'auth/configuration-not-found') {
-          alert('Google Sign-in is not enabled in Firebase Console. Please go to Firebase Console -> Authentication -> Sign-in method and enable Google.');
-        }
-        throw redirectErr;
+      // Domain unauthorized in Firebase Console
+      if (err?.code === 'auth/unauthorized-domain') {
+        const errorMsg = `Domain "${window.location.hostname}" is not authorized for Google Sign-In in Firebase Console. Please add "${window.location.hostname}" under Firebase Console -> Authentication -> Settings -> Authorized Domains.`;
+        console.error('[HoverConvert]', errorMsg, err);
+        alert(errorMsg);
+        throw new Error(errorMsg);
       }
+
+      // Popup blocked by browser — fallback to redirect
+      if (err?.code === 'auth/popup-blocked') {
+        console.warn('[HoverConvert] Popup blocked by browser, attempting redirect fallback...');
+        try {
+          await signInWithRedirect(auth, googleProvider);
+          return null;
+        } catch (redirectErr: any) {
+          console.error('[HoverConvert] Firebase Google sign-in redirect failed:', redirectErr);
+          throw redirectErr;
+        }
+      }
+
+      // Catch-all
+      const errorMsg = err?.message || 'Google Sign-In failed. Please try again.';
+      alert(`Google Sign-In Error: ${errorMsg}`);
+      throw err;
     }
   };
 
