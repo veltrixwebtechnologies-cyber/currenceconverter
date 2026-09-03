@@ -193,9 +193,75 @@ app.post('/api/subscription/confirm-payment', async (req, res) => {
       return res.status(401).json({ success: false, message: 'Authentication required' });
     }
 
-    const { paymentId, subscriptionId, email } = req.body || {};
-    let userEmail = email;
+    const { paymentId, subscriptionId, status, email } = req.body || {};
+    const validStatuses = ['succeeded', 'completed', 'active', 'paid', 'success'];
 
+    // 1. Check client-provided status parameter
+    if (status) {
+      const lowerStatus = String(status).toLowerCase();
+      if (!validStatuses.includes(lowerStatus)) {
+        console.warn(`[ConfirmPayment] Rejected activation for userId=${userId}: status is '${status}'`);
+        return res.status(400).json({
+          success: false,
+          message: `Payment is not completed. Current status: ${status}`
+        });
+      }
+    }
+
+    // 2. Verify with Dodo Payments API if DODO_API_KEY is configured
+    const DODO_API_KEY = process.env.DODO_API_KEY;
+    let verifiedViaDodo = false;
+
+    if (DODO_API_KEY && (paymentId || subscriptionId)) {
+      try {
+        const dodo = new DodoPayments({
+          bearerToken: DODO_API_KEY,
+          environment: DODO_API_KEY.includes('test') || DODO_API_KEY.startsWith('E-') ? 'test_mode' : 'live_mode'
+        });
+
+        if (paymentId) {
+          const payment: any = await dodo.payments.retrieve(paymentId);
+          const pStatus = payment?.status?.toLowerCase();
+          if (pStatus && validStatuses.includes(pStatus)) {
+            verifiedViaDodo = true;
+          } else if (pStatus && !validStatuses.includes(pStatus)) {
+            console.warn(`[ConfirmPayment] Dodo API returned non-success status: ${payment.status}`);
+            return res.status(400).json({
+              success: false,
+              message: `Payment verification failed. Dodo status: ${payment.status}`
+            });
+          }
+        } else if (subscriptionId) {
+          const sub: any = await dodo.subscriptions.retrieve(subscriptionId);
+          const sStatus = sub?.status?.toLowerCase();
+          if (sStatus && validStatuses.includes(sStatus)) {
+            verifiedViaDodo = true;
+          } else if (sStatus && !validStatuses.includes(sStatus)) {
+            console.warn(`[ConfirmPayment] Dodo API returned non-success subscription status: ${sub.status}`);
+            return res.status(400).json({
+              success: false,
+              message: `Subscription verification failed. Dodo status: ${sub.status}`
+            });
+          }
+        }
+      } catch (dodoErr: any) {
+        console.warn('[ConfirmPayment] Dodo API verification check error:', dodoErr.message);
+      }
+    }
+
+    // 3. Reject if no valid status parameter was provided and Dodo API check didn't verify it
+    if (!status && !verifiedViaDodo) {
+      const existingSub = await db.getSubscription(userId);
+      if (existingSub && existingSub.premium) {
+        return res.json({ success: true, message: 'Pro subscription active' });
+      }
+      return res.status(400).json({
+        success: false,
+        message: 'Payment verification unconfirmed. Please wait for payment provider processing.'
+      });
+    }
+
+    let userEmail = email;
     if (!userEmail) {
       try {
         const u = await getAuth().getUser(userId);
@@ -206,7 +272,7 @@ app.post('/api/subscription/confirm-payment', async (req, res) => {
     const refId = paymentId || subscriptionId || 'dodo_direct_' + Date.now();
     await db.upsertSubscription(userId, userEmail || '', 'pro_lifetime', refId);
 
-    console.log(`✅ Direct payment confirmation activated for userId=${userId}, email=${userEmail}`);
+    console.log(`✅ Direct payment confirmation verified and activated for userId=${userId}, email=${userEmail}`);
     res.json({ success: true, message: 'Pro subscription activated' });
   } catch (error: any) {
     console.error('Payment confirmation error:', error);
