@@ -241,55 +241,56 @@ function AppContent() {
   useEffect(() => {
     if (!clerkIsLoaded) return;
     const syncAuthWithExtension = async () => {
-      const targetExtId = extensionId || localStorage.getItem('hc_extension_id');
-      if (!targetExtId) return;
-
       try {
         if (clerkIsSignedIn && clerkGetToken && clerkUser) {
           const token = await clerkGetToken();
           if (token) {
-            if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-              const sessionPayload = {
-                type: 'INSTANT_CURRENCY_FIREBASE_SESSION',
-                token: token,
-                user: {
-                  id: clerkUser.uid,
-                  email: clerkUser.email
-                },
-                subscription: {
-                  active: isPro,
-                  status: isPro ? 'active' : 'inactive',
-                  plan_type: isPro ? 'pro_lifetime' : 'free'
-                }
-              };
+            const sessionPayload = {
+              type: 'INSTANT_CURRENCY_CLERK_SESSION',
+              token: token,
+              user: {
+                id: clerkUser.uid,
+                email: clerkUser.email
+              },
+              subscription: {
+                active: isPro,
+                status: isPro ? 'active' : 'inactive',
+                plan_type: isPro ? 'pro_lifetime' : 'free'
+              }
+            };
+
+            // Post to window so content.js can catch and relay to background script
+            window.postMessage(sessionPayload, '*');
+            window.postMessage({ ...sessionPayload, type: 'INSTANT_CURRENCY_FIREBASE_SESSION' }, '*');
+
+            const targetExtId = extensionId || localStorage.getItem('hc_extension_id');
+            if (targetExtId && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
               chrome.runtime.sendMessage(targetExtId, sessionPayload, (response: any) => {
                 if (chrome.runtime.lastError) {
-                  console.warn('Extension sync failed (expected if not installed/configured):', chrome.runtime.lastError.message);
+                  console.warn('Extension sync via runtime ID failed:', chrome.runtime.lastError.message);
                 } else {
-                  console.log('Synced session to Chrome Extension.', response);
+                  console.log('Synced session to Chrome Extension via runtime ID.', response);
                 }
               });
-              // Also send with legacy type for extension compatibility
-              chrome.runtime.sendMessage(targetExtId, { ...sessionPayload, type: 'INSTANT_CURRENCY_CLERK_SESSION' });
             }
           }
         } else {
           // Clear session in extension on logout
-          if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-            chrome.runtime.sendMessage(
-              targetExtId,
-              {
-                type: 'INSTANT_CURRENCY_CLERK_SESSION',
-                token: null,
-                user: null,
-                subscription: null
-              },
-              () => {
-                if (chrome.runtime.lastError) {
-                  // Ignore
-                }
+          const logoutPayload = {
+            type: 'INSTANT_CURRENCY_CLERK_SESSION',
+            token: null,
+            user: null,
+            subscription: null
+          };
+          window.postMessage(logoutPayload, '*');
+
+          const targetExtId = extensionId || localStorage.getItem('hc_extension_id');
+          if (targetExtId && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+            chrome.runtime.sendMessage(targetExtId, logoutPayload, () => {
+              if (chrome.runtime.lastError) {
+                // Ignore
               }
-            );
+            });
           }
         }
       } catch (err) {
