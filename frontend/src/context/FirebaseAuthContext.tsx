@@ -95,9 +95,7 @@ export const FirebaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
         }
       }
 
-      // Catch-all
-      const errorMsg = err?.message || 'Google Sign-In failed. Please try again.';
-      console.error('[HoverConvert] Google Sign-In error:', err);
+      console.error('[HoverConvert] Google Sign-In error:', err?.message || err);
       throw err;
     }
   };
